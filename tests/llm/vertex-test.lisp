@@ -3,6 +3,16 @@
 (def-suite vertex-suite :in ourro)
 (in-suite vertex-suite)
 
+(test configuration-error-is-a-non-retryable-provider-error
+  ;; A missing key/model/project raises CONFIGURATION-ERROR. It subclasses
+  ;; provider-error (so existing provider-error handlers still catch it) but is
+  ;; distinguishable for the boot path's exit-78 (EX_CONFIG) branch, and is
+  ;; never retryable — a mis-set env var must not be ridden out by retry.
+  (is-true (subtypep 'ourro.llm:configuration-error 'ourro.llm:provider-error))
+  (let ((c (make-condition 'ourro.llm:configuration-error :message "no key")))
+    (is-true (typep c 'ourro.llm:provider-error))
+    (is (null (ourro.llm:provider-error-retryable-p c)))))
+
 (test json-helpers
   (let ((object (ourro.llm:json-object "a" 1 "b" "two")))
     (is (= 1 (ourro.llm:json-value object "a")))

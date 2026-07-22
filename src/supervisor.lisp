@@ -1357,7 +1357,16 @@ down the agent's long-lived control connection."
          ;; FIND-BOOTABLE-GENERATION must not reject it (F-7). Cold/crash boots
          ;; leave this nil and always use a :good record.
          (deliberate-target nil)
+         ;; Self-heal a home bricked by a prior crash/probation cascade (e.g. the
+         ;; seed was quarantined because the API key was mis-set). INIT runs this
+         ;; too, but a plain `ourro run` must not dead-end at "no good generation
+         ;; to boot" when the genome tip is rebuildable — otherwise the user has
+         ;; to re-init to recover. Runs once, before the loop: if the healed
+         ;; generation is genuinely broken it re-quarantines on the next boot and
+         ;; the crash path fatals cleanly (no infinite un-quarantine loop).
          (record (or (latest-good-generation)
+                     (progn (ignore-errors (ensure-bootable-generation config))
+                            (latest-good-generation))
                      (error "no good generation to boot"))))
     ;; Reclaim disk from superseded generation images before the first boot
     ;; and after every new one (M4-4).
@@ -1457,6 +1466,20 @@ could not be rebuilt; rebooting current.~%"
                        (unless (pget handoff :visiting)
                          (unless (eq (pget target :status) :quarantined)
                            (set-current-generation (pget target :id))))))))
+                 ;; Configuration/environment error (exit 78 = EX_CONFIG): the
+                 ;; agent's CODE is fine — the environment is misconfigured
+                 ;; (missing API key/model, no GCP project). Re-running can't fix
+                 ;; it, and quarantining would brick the home for a mis-set env
+                 ;; var. Surface the agent's own message (already in
+                 ;; agent-stderr.log) and stop cleanly, WITHOUT counting a crash
+                 ;; or quarantining.
+                 ((and (eql code 78) (not hung-p))
+                  (format t "~&[ourro] ~A could not start: configuration error ~
+(see the message above). Nothing was quarantined — fix your environment (e.g. ~
+set OURRO_BEDROCK_API_KEY / OURRO_MODEL) and run `ourro` again.~%"
+                          (pget record :id))
+                  (finish-output)
+                  (return :config-error))
                  ;; Crash (or hang): maybe quarantine, then reboot last-good.
                  (t
                   (let ((id (pget record :id))

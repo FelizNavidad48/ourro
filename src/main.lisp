@@ -163,4 +163,9 @@ Always exits 0 with a verdict; exit 1 only on infrastructure failure."
       (error (c)
         (ignore-errors
          (format *error-output* "~&[ourro-agent] fatal: ~A~%" c))
-        (sb-ext:exit :code 1)))))
+        ;; A configuration error (missing API key/model, no GCP project) is a
+        ;; user-fixable setup problem, not a crashing generation. Exit with a
+        ;; distinct code (78 = EX_CONFIG) so the supervisor surfaces it and
+        ;; stops rather than quarantining a perfectly good generation over a
+        ;; mis-set env var and bricking the home.
+        (sb-ext:exit :code (if (typep c 'ourro.llm:configuration-error) 78 1))))))

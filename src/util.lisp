@@ -55,7 +55,17 @@
     copy))
 
 (defun getenv (name &optional default)
-  (or (uiop:getenv name) default))
+  "Read environment variable NAME. For the project's own OURRO_* variables,
+transparently fall back to the legacy OURO_* spelling (the pre-rename prefix,
+one fewer R) when the OURRO_* form is unset — so a shell that still exports
+OURO_BEDROCK_API_KEY / OURO_MODEL / OURO_HOME etc. keeps working after the
+ouroboros→ourro rename. Only OURRO_-prefixed names get the fallback; every
+other variable (AWS_*, PATH, …) is read verbatim."
+  (or (uiop:getenv name)
+      (and (>= (length name) 6)
+           (string= name "OURRO_" :end1 6)
+           (uiop:getenv (concatenate 'string "OURO_" (subseq name 6))))
+      default))
 
 (defvar *ourro-home* nil
   "Cached ourro state directory.")

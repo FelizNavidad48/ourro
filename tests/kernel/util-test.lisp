@@ -9,6 +9,25 @@
          (back (ourro.util:read-safe-from-string text)))
     (is (equal form back))))
 
+(test getenv-falls-back-to-legacy-ouro-prefix
+  ;; After the ouroboros→ourro rename, an OURRO_* lookup transparently falls
+  ;; back to the legacy OURO_* spelling (one fewer R), so a shell that still
+  ;; exports OURO_BEDROCK_API_KEY etc. keeps working.
+  (unwind-protect
+       (progn
+         (sb-posix:setenv "OURO_ZZ_LEGACY_TEST" "legacy-hit" 1)
+         ;; The OURRO_* form is unset → the legacy OURO_* value is used.
+         (is (string= "legacy-hit"
+                      (ourro.util:getenv "OURRO_ZZ_LEGACY_TEST")))
+         ;; A non-OURRO_ name is read verbatim — no fallback games.
+         (is (null (ourro.util:getenv "ZZ_LEGACY_TEST")))
+         ;; An explicit OURRO_* value wins over the legacy one.
+         (sb-posix:setenv "OURRO_ZZ_LEGACY_TEST" "new-hit" 1)
+         (is (string= "new-hit"
+                      (ourro.util:getenv "OURRO_ZZ_LEGACY_TEST"))))
+    (ignore-errors (sb-posix:unsetenv "OURO_ZZ_LEGACY_TEST"))
+    (ignore-errors (sb-posix:unsetenv "OURRO_ZZ_LEGACY_TEST"))))
+
 (test run-command-returns-output
   (is (string= "hi" (ourro.util:run-command (list "printf" "hi")))))
 

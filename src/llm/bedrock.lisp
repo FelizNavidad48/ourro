@@ -43,10 +43,10 @@ Vertex provider reads."
           (stream-deadline-seconds
             (or (positive-int (ourro.config:setting :max-stream-seconds)) 600)))
       (unless api-key
-        (error 'provider-error
+        (error 'configuration-error
                :message "No Bedrock API key. Set OURRO_BEDROCK_API_KEY (or AWS_BEARER_TOKEN_BEDROCK)."))
       (unless model
-        (error 'provider-error
+        (error 'configuration-error
                :message "No Bedrock model. Set OURRO_MODEL to a model alias (opus-4-6 / sonnet-4-6 / haiku-4-5) or a Bedrock inference-profile id (e.g. global.anthropic.claude-opus-4-5-20251101-v1:0)."))
       (make-instance 'bedrock-provider
                      :model model :region region :api-key api-key

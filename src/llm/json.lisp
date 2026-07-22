@@ -18,6 +18,7 @@
            #:retry-max-attempts
            #:retry-backoff-cap
            #:provider-error
+           #:configuration-error
            #:provider-error-message
            #:provider-error-retryable-p
            #:provider-error-retry-after

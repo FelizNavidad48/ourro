@@ -13,6 +13,15 @@ Retry-After header, when it sent one), or NIL. COMPLETE-WITH-RETRY prefers this
 over its own backoff so a throttling 429 is honoured on the server's timescale."))
   (:report (lambda (c stream) (format stream "~A" (provider-error-message c)))))
 
+(define-condition configuration-error (provider-error) ()
+  (:documentation "A provider could not be built because the environment is
+misconfigured — a missing API key or model, a missing GCP project, etc. This is
+a user-fixable setup problem, NOT a transient failure or a code defect. The boot
+path exits with a distinct code so the supervisor surfaces it and stops, rather
+than treating a mis-set env var as a crashing generation and quarantining it
+(which would brick the home). Subclasses provider-error, so existing
+provider-error handlers still catch it; it is never retryable."))
+
 (defclass provider ()
   ((model :initarg :model :accessor provider-model)))
 
@@ -221,7 +230,7 @@ over both, and the model default stays the pro model."
                                      (getenv "OURRO_VERTEX_PROJECT"))
                                     (api-key nil)
                                     ((discover-gcloud-project))
-                                    (t (error 'provider-error
+                                    (t (error 'configuration-error
                                               :message "No GCP project. Set OURRO_VERTEX_PROJECT or gcloud config, or provide an API key via OURRO_VERTEX_API_KEY.")))))))
 
 (defun configure-default-provider (&rest args)
