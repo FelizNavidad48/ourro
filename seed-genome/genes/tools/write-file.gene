@@ -1,0 +1,26 @@
+(defgene tool/write-file
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-write)
+     :provenance (:seed t))
+  (:doc "Create or overwrite a workspace file with the given contents.
+Parent directories are created as needed.")
+  (:code
+   (deftool write-file
+       ((path :string "Path to write (workspace-relative or absolute)" :required t)
+        (content :string "The full new contents of the file" :required t))
+     (:doc "Write CONTENT to PATH, overwriting any existing file.")
+     (:contract (:pre ((stringp path) (stringp content))
+                 :post ((stringp result))))
+     (cap/write-file (workspace-path path) content)
+     (format nil "wrote ~A (~A bytes)"
+             (display-path (workspace-path path)) (length content))))
+  (:tests
+   (test write-file/creates
+     (let ((h (make-hash-table :test (quote equal))))
+       (setf (gethash "path" h) "ourro-write-test.txt")
+       (setf (gethash "content" h) "hello ourro")
+       (let ((out (run-tool (find-tool "write_file") h)))
+         (is (search "wrote" out))
+         (is (string= "hello ourro"
+                      (cap/read-file (workspace-path "ourro-write-test.txt"))))
+         (cap/delete-file (workspace-path "ourro-write-test.txt")))))))
