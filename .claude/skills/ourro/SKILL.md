@@ -7,13 +7,13 @@ description: Working on the ourro self-evolving Lisp agent — build/test/run wo
 
 A self-evolving Common Lisp (SBCL) agent: a supervisor (`bin/ourro`) owns a
 git-backed generation ledger and builds each generation as an executable image;
-the agent image observes tool use, mines patterns, asks the LLM (Vertex Gemini)
+the agent image observes tool use, mines patterns, asks the LLM (Vertex Gemini or Bedrock Claude)
 for `defgene` S-expressions, verifies them through a **6-stage gauntlet**,
 hot-loads them live, and restarts seamlessly into snapshots.
 
-Docs: `docs/greenfield-lisp-self-evolving-agent.md` (PRD, PR-1..PR-13),
-`docs/ROADMAP.md` (scorecard + status — read before new work, update on landing),
-`docs/plan-m6-m8.md` (M6–M8 plan).
+Tracked docs: `README.md` (product + configuration), `AGENTS.md`,
+`CONTRIBUTING.md`, `qa/README.md`. `docs/` is a gitignored local scratch
+area for plans and notes — read it when present, never commit it.
 
 ## Commands
 
@@ -23,7 +23,7 @@ Docs: `docs/greenfield-lisp-self-evolving-agent.md` (PRD, PR-1..PR-13),
 | `make dev` | Agent **from source**, no supervisor — fast loop; hot-load works, snapshots/restarts don't |
 | `make build && ./bin/ourro` | Full supervised loop. `make build` is a **clean slate** (passes `ourro init --force`: fresh base.core + image AND genome re-seeded from seed-genome/). To rebuild keeping the evolved genome/ledger: `./bin/ourro init --source-dir . --rebuild`. Reuse an existing image with plain `./bin/ourro`. Scratch home: prefix with `OURRO_HOME=/tmp/oh`. |
 | `make smoke` | Load source + compile genome + boot check, no TUI (prints `OURRO.KERNEL locked: NIL` from source, `T` in a built image) |
-| `make verify-e2e` | Headless M8 end-to-end: real `make build` + kernel-path proof (selftest, `OURRO.KERNEL` lock, rebuild, `--replay`); no LLM. Live-Gemini beats: `docs/live-shoot.md` (needs ADC). |
+| `make verify-e2e` | Headless M8 end-to-end: real `make build` + kernel-path proof (selftest, `OURRO.KERNEL` lock, rebuild, `--replay`); no LLM. |
 | `make supervisor` | Rebuild just `bin/ourro` (internal; implied by build/install) |
 
 Single suite: load `ourro/tests`, then `(fiveam:run! 'ourro.tests::<suite>)`.
