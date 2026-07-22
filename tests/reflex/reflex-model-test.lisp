@@ -28,3 +28,28 @@
     (is (string= (ourro.txn:canonical-hash first)
                  (ourro.txn:canonical-hash second)))))
 
+(test reflex-model-rejects-authority-broadening-and-unknown-steps
+  (signals error
+    (ourro.reflex.model:definition-from-form
+     (fixture-reflex-form :capabilities '(:observe :network))))
+  (signals error
+    (ourro.reflex.model:definition-from-form
+     '(define-reflex bad
+        (:identity (:version 1 :capabilities ()))
+        (:trigger (:kind :probe))
+        (:state (:version 1))
+        (:workflow ((:id :one :activity :finish :next :missing)))))))
+
+(test reflex-state-migration-round-trips
+  (let ((ourro.reflex.model::*state-migrations* (make-hash-table :test #'equal)))
+    (ourro.reflex.model:register-state-migration
+     'fixture 1 2
+     (lambda (state) (setf (getf state :added) 7) state)
+     (lambda (state) (remf state :added) state))
+    (let* ((before '(:step :one :count 2))
+           (forward (ourro.reflex.model:migrate-reflex-state
+                     'fixture before 1 2))
+           (reverse (ourro.reflex.model:migrate-reflex-state
+                     'fixture forward 2 1)))
+      (is (= 7 (getf forward :added)))
+      (is (equal before reverse)))))
