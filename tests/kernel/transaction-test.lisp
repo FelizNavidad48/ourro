@@ -62,3 +62,109 @@
   (signals ourro.txn:canonical-encoding-error
     (ourro.txn:canonical-encode (make-symbol "NOT-DURABLE"))))
 
+(test canonical-codec-distinguishes-wide-data-from-deep-data
+  (let* ((wide (loop for index below 2000 collect index))
+         (decoded (ourro.txn:canonical-decode (ourro.txn:canonical-encode wide))))
+    (is (equal wide decoded)))
+  (let ((ourro.txn:*max-canonical-depth* 8))
+    (signals ourro.txn:canonical-encoding-error
+      (ourro.txn:canonical-encode
+       (loop with value = :leaf
+             repeat 12 do (setf value (list value))
+             finally (return value))))))
+
+(test wal-round-trip-and-torn-tail-recovery
+  (with-transaction-home
+    (let ((path (ourro.util:ourro-path "state" "test.wal")))
+      (ourro.txn:append-wal-record path '(:id "one" :status :prepared))
+      (ourro.txn:append-wal-record path '(:id "two" :status :verified))
+      (multiple-value-bind (records health) (ourro.txn:read-wal path)
+        (is (eq :ok health))
+        (is (equal '((:id "one" :status :prepared)
+                     (:id "two" :status :verified))
+                   records)))
+      ;; A crash can leave an incomplete final header. Recovery discards only
+      ;; those bytes and preserves both committed records.
+      (with-open-file (out path :direction :output :if-exists :append
+                                :element-type '(unsigned-byte 8))
+        (write-sequence (sb-ext:string-to-octets "OURRO-TXN/1 20"
+                                                :external-format :utf-8)
+                        out))
+      (multiple-value-bind (records health) (ourro.txn:recover-wal path)
+        (is (eq :torn-tail health))
+        (is (= 2 (length records))))
+      (multiple-value-bind (records health) (ourro.txn:read-wal path)
+        (is (eq :ok health))
+        (is (= 2 (length records)))))))
+
+(test wal-interior-corruption-is-visible
+  (with-transaction-home
+    (let ((path (ourro.util:ourro-path "state" "bad.wal")))
+      (ourro.txn:append-wal-record path '(:id "one" :status :prepared))
+      (ourro.txn:append-wal-record path '(:id "two" :status :verified))
+      (with-open-file (io path :direction :io :if-exists :overwrite
+                              :element-type '(unsigned-byte 8))
+        ;; Flip a payload byte in the first complete frame.
+        (let ((newline (loop for byte = (read-byte io)
+                             for i from 0
+                             when (= byte (char-code #\Newline)) return i)))
+          (file-position io (1+ newline))
+          (write-byte (logxor (read-byte io) 1) io)))
+      (signals ourro.txn:wal-corruption (ourro.txn:read-wal path))
+      (is (eq :degraded (getf (ourro.txn:wal-health path) :status))))))
+
+(test wal-recovers-after-every-byte-of-a-tail-frame-write
+  (with-transaction-home
+    (let ((complete (ourro.util:ourro-path "state" "complete.wal"))
+          (first-only (ourro.util:ourro-path "state" "first.wal"))
+          (crashed (ourro.util:ourro-path "state" "crashed.wal")))
+      (ourro.txn:append-wal-record first-only '(:id "one" :status :committed))
+      (ourro.txn:append-wal-record complete '(:id "one" :status :committed))
+      (ourro.txn:append-wal-record complete '(:id "two" :status :committed))
+      (let* ((bytes (ourro.txn::read-file-octets complete))
+             (first-length
+               (with-open-file (in first-only :direction :input
+                                              :element-type '(unsigned-byte 8))
+                 (file-length in))))
+        (loop for cut from first-length below (length bytes) do
+          (with-open-file (out crashed :direction :output
+                                  :if-exists :supersede
+                                  :if-does-not-exist :create
+                                  :element-type '(unsigned-byte 8))
+            (write-sequence bytes out :end cut))
+          (multiple-value-bind (records health) (ourro.txn:recover-wal crashed)
+            (is (eq (if (= cut first-length) :ok :torn-tail) health))
+            (is (equal '((:id "one" :status :committed)) records))))
+        (with-open-file (out crashed :direction :output
+                                :if-exists :supersede
+                                :element-type '(unsigned-byte 8))
+          (write-sequence bytes out))
+        (multiple-value-bind (records health) (ourro.txn:recover-wal crashed)
+          (is (eq :ok health))
+          (is (= 2 (length records))))))))
+
+(test verification-artifact-is-self-authenticating-and-immutable
+  (with-transaction-home
+    (let* ((artifact (ourro.txn:make-verification-artifact
+                      :transaction-id "verify-1"
+                      :source "(defgene test)"
+                      :authority '(:filesystem-read)
+                      :fingerprints '(:sbcl "test")
+                      :stages '((:read :ok) (:lint :ok))))
+           (path (ourro.txn:persist-verification-artifact artifact)))
+      (is-true (ourro.txn:verification-artifact-valid-p artifact))
+      (is (probe-file path))
+      (is (ourro.txn:canonical-equal artifact
+                                    (ourro.txn:read-verification-artifact path)))
+      (let ((tampered (ourro.util:plist-put artifact :authority '(:network))))
+        (is-false (ourro.txn:verification-artifact-valid-p tampered))))))
+
+(test lifecycle-attestation-is-self-authenticating
+  (let ((record (ourro.txn:make-lifecycle-attestation
+                 :transaction-id "tx-1" :version-hash "version"
+                 :proof-hash "proof" :prior-status :prepared
+                 :status :verified :actor "verifier" :time 1)))
+    (is-true (ourro.txn:lifecycle-attestation-valid-p record))
+    (is-false
+     (ourro.txn:lifecycle-attestation-valid-p
+      (ourro.util:plist-put record :status :active)))))
