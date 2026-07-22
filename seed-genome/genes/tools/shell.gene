@@ -1,0 +1,30 @@
+(defgene tool/shell
+    (:generation 1 :parent nil
+     :capabilities (:subprocess)
+     :provenance (:seed t))
+  (:doc "Run a shell command in the workspace and return its combined
+stdout/stderr and exit code. Use this for build, test, lint, git, and other
+project commands. Commands containing spaces run under /bin/sh -c, so
+pipelines and shell builtins work.")
+  (:code
+   (deftool shell
+       ((command :string "The shell command line to run" :required t)
+        (timeout :integer "Seconds before the command is killed" :default 120))
+     (:doc "Run a shell command in the workspace; returns output and exit code.")
+     (:contract (:pre ((stringp command)) :post ((stringp result))))
+     (let ((argv (if (search " " command)
+                     (list "/bin/sh" "-c" command)
+                     (list command))))
+       (multiple-value-bind (output code)
+           (cap/run-program argv
+                            :directory (workspace-path ".")
+                            :timeout timeout)
+         (clamp-output (format nil "$ ~A~%~A~%[exit ~A]" command output code)
+                       :label "command output")))))
+  (:tests
+   (test shell/echo
+     (let ((h (make-hash-table :test (quote equal))))
+       (setf (gethash "command" h) "echo ourro-shell-ok")
+       (let ((out (run-tool (find-tool "shell") h)))
+         (is (search "ourro-shell-ok" out))
+         (is (search "exit 0" out)))))))
