@@ -1,0 +1,27 @@
+(defgene tool/read-file
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-read)
+     :provenance (:seed t))
+  (:doc "Read a UTF-8 text file from the workspace, returning it with line
+numbers (cat -n style). Supports an offset and a line limit for large files.")
+  (:code
+   (deftool read-file
+       ((path :string "Workspace-relative or absolute path to read" :required t)
+        (offset :integer "First line to read (1-based)" :default 1)
+        (limit :integer "Maximum number of lines to read" :default 2000))
+     (:doc "Read a text file with line numbers. Use offset/limit for big files.")
+     (:contract (:pre ((stringp path) (plusp offset))
+                 :post ((stringp result))))
+     (clamp-output (read-file-numbered path :offset offset :limit limit)
+                   :max-chars 30000 :label "file")))
+  (:tests
+   (test read-file/roundtrip
+     (let ((path (workspace-path "ourro-read-test.txt")))
+       (cap/write-file path (format nil "alpha~%beta~%gamma~%"))
+       (let ((out (run-tool (find-tool "read_file")
+                            (let ((h (make-hash-table :test (quote equal))))
+                              (setf (gethash "path" h) "ourro-read-test.txt")
+                              h))))
+         (is (search "alpha" out))
+         (is (search "gamma" out))
+         (cap/delete-file path))))))
