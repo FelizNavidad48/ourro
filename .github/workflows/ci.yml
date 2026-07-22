@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SBCL and QA dependencies
+        run: brew install sbcl tmux
+      - name: Install Quicklisp
+        run: |
+          curl --fail --silent --show-error --output /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive --load /tmp/quicklisp.lisp \
+            --eval '(quicklisp-quickstart:install :path (merge-pathnames "quicklisp/" (user-homedir-pathname)))'
+      - name: Unit and integration suites
+        run: make test
+      - name: Source smoke gate
+        run: make smoke
+      # Scripted QA scenarios were removed 2026-07-18 — QA is live-only,
+      # agent-driven missions now (qa/README.md); CI keeps the free gates.
+      - name: Supervised end-to-end proof
+        run: make verify-e2e
