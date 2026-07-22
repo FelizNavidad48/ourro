@@ -1,0 +1,237 @@
+date,order_id,channel,product,units,unit_price,revenue
+2025-01-02,LC-1001,web,Wildflower Honey,1,23.00,23.00
+2025-01-02,LC-1002,web,Citrus Grove,1,22.00,22.00
+2025-01-05,LC-1003,wholesale,Cedar & Smoke,24,15.60,374.40
+2025-01-08,LC-1004,web,Cedar & Smoke,3,26.00,78.00
+2025-01-08,LC-1005,web,Wildflower Honey,1,23.00,23.00
+2025-01-09,LC-1006,wholesale,Citrus Grove,48,13.20,633.60
+2025-01-10,LC-1007,web,Sample Trio,3,15.00,45.00
+2025-01-10,LC-1008,web,Wildflower Honey,1,23.00,23.00
+2025-01-11,LC-1009,web,Hearth No. 4,1,24.00,24.00
+2025-01-13,LC-1010,web,Sample Trio,3,15.00,45.00
+2025-01-14,LC-1011,market,Citrus Grove,1,22.00,22.00
+2025-01-15,LC-1012,web,Citrus Grove,2,22.00,44.00
+2025-01-16,LC-1013,web,Sample Trio,1,15.00,15.00
+2025-01-17,LC-1014,market,Cedar & Smoke,1,26.00,26.00
+2025-01-17,LC-1015,market,Citrus Grove,1,22.00,22.00
+2025-01-18,LC-1016,wholesale,Sample Trio,24,9.00,216.00
+2025-01-18,LC-1017,market,Citrus Grove,1,22.00,22.00
+2025-01-19,LC-1018,web,Wildflower Honey,1,23.00,23.00
+2025-01-19,LC-1019,wholesale,Cedar & Smoke,24,15.60,374.40
+2025-01-20,LC-1020,web,Sample Trio,2,15.00,30.00
+2025-01-21,LC-1021,market,Wildflower Honey,1,23.00,23.00
+2025-01-22,LC-1022,web,Cedar & Smoke,4,26.00,104.00
+2025-01-22,LC-1023,web,Wildflower Honey,3,23.00,69.00
+2025-01-23,LC-1024,market,Wildflower Honey,4,23.00,92.00
+2025-01-23,LC-1025,wholesale,Sample Trio,48,9.00,432.00
+2025-01-24,LC-1026,wholesale,Cedar & Smoke,48,15.60,748.80
+2025-01-24,LC-1027,web,Citrus Grove,2,22.00,44.00
+2025-01-25,LC-1028,market,Wildflower Honey,3,23.00,69.00
+2025-01-25,LC-1029,web,Wildflower Honey,4,23.00,92.00
+2025-01-25,LC-1030,web,Wildflower Honey,1,23.00,23.00
+2025-01-26,LC-1031,web,Cedar & Smoke,4,26.00,104.00
+2025-01-26,LC-1032,wholesale,Sample Trio,36,9.00,324.00
+2025-01-29,LC-1033,market,Citrus Grove,4,22.00,88.00
+2025-01-29,LC-1034,wholesale,Wildflower Honey,24,13.80,331.20
+2025-01-30,LC-1035,web,Citrus Grove,4,22.00,88.00
+2025-01-30,LC-1036,market,Cedar & Smoke,4,26.00,104.00
+2025-01-31,LC-1037,web,Wildflower Honey,2,23.00,46.00
+2025-01-31,LC-1038,wholesale,Citrus Grove,36,13.20,475.20
+2025-01-31,LC-1039,market,Cedar & Smoke,2,26.00,52.00
+2025-02-01,LC-1040,market,Wildflower Honey,2,23.00,46.00
+2025-02-01,LC-1041,web,Cedar & Smoke,4,26.00,104.00
+2025-02-02,LC-1042,web,Sample Trio,3,15.00,45.00
+2025-02-02,LC-1043,market,Sample Trio,2,15.00,30.00
+2025-02-04,LC-1044,market,Citrus Grove,4,22.00,88.00
+2025-02-05,LC-1045,web,Wildflower Honey,2,23.00,46.00
+2025-02-05,LC-1046,market,Sample Trio,1,15.00,15.00
+2025-02-05,LC-1047,wholesale,Wildflower Honey,24,13.80,331.20
+2025-02-06,LC-1048,web,Hearth No. 4,1,24.00,24.00
+2025-02-08,LC-1049,market,Wildflower Honey,2,23.00,46.00
+2025-02-09,LC-1050,web,Cedar & Smoke,3,26.00,78.00
+2025-02-10,LC-1051,market,Sample Trio,2,15.00,30.00
+2025-02-11,LC-1052,web,Sample Trio,3,15.00,45.00
+2025-02-13,LC-1053,web,Hearth No. 4,2,24.00,48.00
+2025-02-13,LC-1054,market,Cedar & Smoke,1,26.00,26.00
+2025-02-14,LC-1055,market,Cedar & Smoke,3,26.00,78.00
+2025-02-14,LC-1056,web,Hearth No. 4,2,24.00,48.00
+2025-02-15,LC-1057,market,Hearth No. 4,3,24.00,72.00
+2025-02-16,LC-1058,wholesale,Hearth No. 4,12,14.40,172.80
+2025-02-17,LC-1059,market,Hearth No. 4,1,24.00,24.00
+2025-02-18,LC-1060,wholesale,Cedar & Smoke,24,15.60,374.40
+2025-02-19,LC-1061,market,Wildflower Honey,1,23.00,23.00
+2025-02-19,LC-1062,web,Hearth No. 4,1,24.00,24.00
+2025-02-20,LC-1063,market,Cedar & Smoke,1,26.00,26.00
+2025-02-22,LC-1064,web,Citrus Grove,4,22.00,88.00
+2025-02-22,LC-1065,market,Citrus Grove,3,22.00,66.00
+2025-02-23,LC-1066,market,Cedar & Smoke,1,26.00,26.00
+2025-02-23,LC-1067,market,Hearth No. 4,1,24.00,24.00
+2025-02-25,LC-1068,web,Hearth No. 4,1,24.00,24.00
+2025-02-27,LC-1069,web,Cedar & Smoke,1,26.00,26.00
+2025-03-01,LC-1070,market,Citrus Grove,2,22.00,44.00
+2025-03-05,LC-1071,market,Citrus Grove,4,22.00,88.00
+2025-03-05,LC-1072,web,Cedar & Smoke,1,26.00,26.00
+2025-03-06,LC-1073,market,Hearth No. 4,3,24.00,72.00
+2025-03-06,LC-1074,wholesale,Sample Trio,36,9.00,324.00
+2025-03-08,LC-1075,web,Hearth No. 4,1,24.00,24.00
+2025-03-08,LC-1075,web,Hearth No. 4,1,24.00,24.00
+2025-03-09,LC-1076,market,Citrus Grove,1,22.00,22.00
+2025-03-09,LC-1076,market,Citrus Grove,1,22.00,22.00
+2025-03-10,LC-1077,market,Wildflower Honey,3,23.00,69.00
+2025-03-10,LC-1077,market,Wildflower Honey,3,23.00,69.00
+2025-03-12,LC-1078,web,Wildflower Honey,1,23.00,23.00
+2025-03-12,LC-1078,web,Wildflower Honey,1,23.00,23.00
+2025-03-13,LC-1079,wholesale,Cedar & Smoke,36,15.60,561.60
+2025-03-13,LC-1079,wholesale,Cedar & Smoke,36,15.60,561.60
+2025-03-13,LC-1080,market,Sample Trio,1,15.00,15.00
+2025-03-13,LC-1080,market,Sample Trio,1,15.00,15.00
+2025-03-14,LC-1081,market,Hearth No. 4,1,24.00,24.00
+2025-03-14,LC-1081,market,Hearth No. 4,1,24.00,24.00
+2025-03-14,LC-1082,web,Sample Trio,4,15.00,60.00
+2025-03-14,LC-1082,web,Sample Trio,4,15.00,60.00
+2025-03-15,LC-1083,web,Hearth No. 4,1,24.00,24.00
+2025-03-15,LC-1084,market,Sample Trio,3,15.00,45.00
+2025-03-15,LC-1085,web,Sample Trio,2,15.00,30.00
+2025-03-16,LC-1086,wholesale,Hearth No. 4,12,14.40,172.80
+2025-03-18,LC-1087,wholesale,Cedar & Smoke,48,15.60,748.80
+2025-03-19,LC-1088,web,Citrus Grove,1,22.00,22.00
+2025-03-19,LC-1089,web,Sample Trio,1,15.00,15.00
+2025-03-20,LC-1090,web,Hearth No. 4,4,24.00,96.00
+2025-03-20,LC-1091,web,Cedar & Smoke,3,26.00,78.00
+2025-03-21,LC-1092,wholesale,Hearth No. 4,48,14.40,691.20
+2025-03-21,LC-1093,web,Sample Trio,1,15.00,15.00
+2025-03-22,LC-1094,web,Wildflower Honey,3,23.00,69.00
+2025-03-22,LC-1095,market,Cedar & Smoke,2,26.00,52.00
+2025-03-22,LC-1096,web,Hearth No. 4,1,24.00,24.00
+2025-03-23,LC-1097,web,Hearth No. 4,3,24.00,72.00
+2025-03-24,LC-1098,web,Citrus Grove,1,22.00,22.00
+2025-03-26,LC-1099,market,Wildflower Honey,1,23.00,23.00
+2025-03-26,LC-1100,web,Cedar & Smoke,1,26.00,26.00
+2025-03-27,LC-1101,web,Wildflower Honey,1,23.00,23.00
+2025-03-27,LC-1102,market,Wildflower Honey,3,23.00,69.00
+2025-03-28,LC-1103,market,Hearth No. 4,3,24.00,72.00
+2025-03-29,LC-1104,wholesale,Citrus Grove,24,13.20,316.80
+2025-03-30,LC-1105,web,Wildflower Honey,2,23.00,46.00
+2025-03-30,LC-1106,market,Hearth No. 4,4,24.00,96.00
+2025-03-31,LC-1107,web,Cedar & Smoke,1,26.00,26.00
+2025-04-02,LC-1108,web,Citrus Grove,3,22.00,66.00
+2025-04-03,LC-1109,wholesale,Cedar & Smoke,48,15.60,748.80
+2025-04-03,LC-1110,web,Cedar & Smoke,4,26.00,104.00
+2025-04-03,LC-1111,market,Wildflower Honey,2,23.00,46.00
+2025-04-04,LC-1112,wholesale,Cedar & Smoke,12,15.60,187.20
+2025-04-05,LC-1113,wholesale,Citrus Grove,48,13.20,633.60
+2025-04-05,LC-1114,web,Cedar & Smoke,1,26.00,26.00
+2025-04-06,LC-1115,web,Hearth No. 4,2,24.00,48.00
+2025-04-09,LC-1116,web,Sample Trio,1,15.00,15.00
+2025-04-09,LC-1117,web,Hearth No. 4,2,24.00,48.00
+2025-04-10,LC-1118,web,Cedar & Smoke,1,26.00,26.00
+2025-04-11,LC-1119,market,Wildflower Honey,3,23.00,69.00
+2025-04-11,LC-1120,wholesale,Wildflower Honey,12,13.80,165.60
+2025-04-12,LC-1121,market,Sample Trio,4,15.00,60.00
+2025-04-12,LC-1122,web,Wildflower Honey,2,23.00,46.00
+2025-04-12,LC-1123,wholesale,Sample Trio,12,9.00,108.00
+2025-04-13,LC-1124,web,Wildflower Honey,1,23.00,23.00
+2025-04-13,LC-1125,wholesale,Sample Trio,12,9.00,108.00
+2025-04-13,LC-1126,web,Hearth No. 4,1,24.00,24.00
+2025-04-16,LC-1127,web,Sample Trio,2,15.00,30.00
+2025-04-16,LC-1128,web,Hearth No. 4,2,24.00,48.00
+2025-04-17,LC-1129,web,Citrus Grove,2,22.00,44.00
+2025-04-17,LC-1130,wholesale,Hearth No. 4,36,14.40,518.40
+2025-04-18,LC-1131,web,Wildflower Honey,1,23.00,23.00
+2025-04-19,LC-1132,market,Citrus Grove,1,22.00,22.00
+2025-04-21,LC-1133,web,Wildflower Honey,2,23.00,46.00
+2025-04-23,LC-1134,web,Wildflower Honey,2,23.00,46.00
+2025-04-24,LC-1135,web,Sample Trio,2,15.00,30.00
+2025-04-25,LC-1136,web,Cedar & Smoke,4,26.00,104.00
+2025-04-25,LC-1137,web,Cedar & Smoke,2,26.00,52.00
+2025-04-26,LC-1138,web,Cedar & Smoke,2,26.00,52.00
+2025-04-27,LC-1139,web,Hearth No. 4,4,24.00,96.00
+2025-04-27,LC-1140,wholesale,Hearth No. 4,12,14.40,172.80
+2025-04-28,LC-1141,market,Sample Trio,1,15.00,15.00
+2025-04-30,LC-1142,market,Citrus Grove,1,22.00,22.00
+2025-04-30,LC-1143,web,Hearth No. 4,1,24.00,24.00
+2025-05-01,LC-1144,market,Wildflower Honey,1,23.00,23.00
+2025-05-01,LC-1145,market,Wildflower Honey,3,23.00,69.00
+2025-05-02,LC-1146,web,Cedar & Smoke,1,26.00,26.00
+2025-05-02,LC-1147,web,Citrus Grove,4,22.00,88.00
+2025-05-03,LC-1148,web,Hearth No. 4,2,24.00,48.00
+2025-05-03,LC-1149,web,Sample Trio,1,15.00,15.00
+2025-05-04,LC-1150,market,Citrus Grove,1,22.00,22.00
+2025-05-04,LC-1151,web,Cedar & Smoke,2,26.00,52.00
+2025-05-09,LC-1152,market,Wildflower Honey,2,23.00,46.00
+2025-05-09,LC-1153,market,Citrus Grove,1,22.00,22.00
+2025-05-11,LC-1154,web,Citrus Grove,1,22.00,22.00
+2025-05-13,LC-1155,web,Cedar & Smoke,4,26.00,104.00
+2025-05-14,LC-1156,market,Wildflower Honey,4,23.00,92.00
+2025-05-14,LC-1157,web,Cedar & Smoke,1,26.00,26.00
+2025-05-15,LC-1158,market,Hearth No. 4,2,24.00,48.00
+2025-05-15,LC-1159,wholesale,Sample Trio,48,9.00,432.00
+2025-05-16,LC-1160,web,Citrus Grove,1,22.00,22.00
+2025-05-16,LC-1161,wholesale,Citrus Grove,24,13.20,316.80
+2025-05-17,LC-1162,web,Citrus Grove,3,22.00,66.00
+2025-05-18,LC-1163,web,Sample Trio,1,15.00,15.00
+2025-05-18,LC-1164,wholesale,Wildflower Honey,48,13.80,662.40
+2025-05-18,LC-1165,web,Wildflower Honey,2,23.00,46.00
+2025-05-19,LC-1166,web,Hearth No. 4,1,24.00,24.00
+2025-05-21,LC-1167,market,Wildflower Honey,2,23.00,46.00
+2025-05-21,LC-1168,market,Hearth No. 4,1,24.00,24.00
+2025-05-22,LC-1169,wholesale,Hearth No. 4,12,14.40,172.80
+2025-05-22,LC-1170,market,Wildflower Honey,3,23.00,69.00
+2025-05-23,LC-1171,web,Sample Trio,1,15.00,15.00
+2025-05-23,LC-1172,web,Cedar & Smoke,2,26.00,52.00
+2025-05-23,LC-1173,market,Hearth No. 4,3,24.00,72.00
+2025-05-24,LC-1174,web,Hearth No. 4,1,24.00,24.00
+2025-05-25,LC-1175,web,Wildflower Honey,4,23.00,92.00
+2025-05-25,LC-1176,wholesale,Sample Trio,24,9.00,216.00
+2025-05-26,LC-1177,market,Cedar & Smoke,4,26.00,104.00
+2025-05-27,LC-1178,web,Wildflower Honey,2,23.00,46.00
+2025-05-29,LC-1179,web,Wildflower Honey,1,23.00,23.00
+2025-05-29,LC-1180,web,Cedar & Smoke,1,26.00,26.00
+2025-05-30,LC-1181,market,Wildflower Honey,2,23.00,46.00
+2025-05-30,LC-1182,market,Cedar & Smoke,2,26.00,52.00
+2025-05-31,LC-1183,market,Sample Trio,1,15.00,15.00
+2025-05-31,LC-1184,market,Citrus Grove,4,22.00,88.00
+2025-06-01,LC-1185,market,Wildflower Honey,1,23.00,23.00
+2025-06-04,LC-1186,web,Sample Trio,1,15.00,15.00
+2025-06-04,LC-1186R,web,Sample Trio,-1,15.00,-15.00
+2025-06-04,LC-1187,web,Wildflower Honey,1,23.00,23.00
+2025-06-04,LC-1187R,web,Wildflower Honey,-1,23.00,-23.00
+2025-06-04,LC-1188,web,Cedar & Smoke,4,26.00,104.00
+2025-06-04,LC-1188R,web,Cedar & Smoke,-1,26.00,-26.00
+2025-06-05,LC-1189,web,Cedar & Smoke,1,26.00,26.00
+2025-06-06,LC-1190,market,Citrus Grove,2,22.00,44.00
+2025-06-06,LC-1191,market,Sample Trio,2,15.00,30.00
+2025-06-06,LC-1192,market,Hearth No. 4,2,24.00,48.00
+2025-06-07,LC-1193,wholesale,Sample Trio,36,9.00,324.00
+2025-06-07,LC-1194,market,Sample Trio,1,15.00,15.00
+2025-06-09,LC-1195,web,Cedar & Smoke,2,26.00,52.00
+2025-06-10,LC-1196,web,Sample Trio,1,15.00,15.00
+2025-06-11,LC-1197,market,Hearth No. 4,2,24.00,48.00
+2025-06-11,LC-1198,market,Hearth No. 4,1,24.00,24.00
+2025-06-11,LC-1199,web,Cedar & Smoke,1,26.00,26.00
+2025-06-12,LC-1200,web,Hearth No. 4,1,24.00,24.00
+2025-06-12,LC-1201,web,Hearth No. 4,3,24.00,72.00
+2025-06-13,LC-1202,web,Cedar & Smoke,1,26.00,26.00
+2025-06-13,LC-1203,web,Sample Trio,1,15.00,15.00
+2025-06-13,LC-1204,web,Hearth No. 4,1,24.00,24.00
+2025-06-14,LC-1205,wholesale,Sample Trio,24,9.00,216.00
+2025-06-15,LC-1206,web,Cedar & Smoke,4,26.00,104.00
+2025-06-15,LC-1207,market,Cedar & Smoke,3,26.00,78.00
+2025-06-15,LC-1208,web,Sample Trio,3,15.00,45.00
+2025-06-16,LC-1209,wholesale,Citrus Grove,24,13.20,316.80
+2025-06-17,LC-1210,wholesale,Hearth No. 4,24,14.40,345.60
+2025-06-18,LC-1211,web,Wildflower Honey,1,23.00,23.00
+2025-06-18,LC-1212,market,Wildflower Honey,2,23.00,46.00
+2025-06-19,LC-1213,wholesale,Cedar & Smoke,36,15.60,561.60
+2025-06-19,LC-1214,market,Cedar & Smoke,1,26.00,26.00
+2025-06-19,LC-1215,market,Hearth No. 4,1,24.00,24.00
+2025-06-21,LC-1216,web,Citrus Grove,1,22.00,22.00
+2025-06-21,LC-1217,web,Sample Trio,3,15.00,45.00
+2025-06-21,LC-1218,web,Cedar & Smoke,1,26.00,26.00
+2025-06-22,LC-1219,web,Cedar & Smoke,1,26.00,26.00
+2025-06-23,LC-1220,market,Hearth No. 4,1,24.00,24.00
+2025-06-26,LC-1221,web,Wildflower Honey,1,23.00,23.00
+2025-06-26,LC-1222,web,Cedar & Smoke,3,26.00,78.00
+2025-06-27,LC-1223,web,Citrus Grove,2,22.00,44.00
+2025-06-27,LC-1224,wholesale,Citrus Grove,12,13.20,158.40
+2025-06-28,LC-1225,market,Sample Trio,4,15.00,60.00
