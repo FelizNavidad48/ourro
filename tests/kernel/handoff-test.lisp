@@ -152,3 +152,112 @@ somewhere to go."
                            (make-string-input-stream (get-output-stream-string buffer))
                            (make-broadcast-stream)))))
 
+(test travel-visit-arms-handoff-and-yields-75
+  (with-travel-home (agent conn buffer)
+    ;; /travel 3 (read-only visit).
+    (ourro.agent::request-travel agent 3 :hard nil)
+    (is (string= "gen-0003" (ourro.agent::agent-pending-handoff agent)))
+    (is (equal '(:hard nil :visiting t) (ourro.agent::agent-pending-travel agent)))
+    (is-false (ourro.agent::agent-running agent))
+    ;; The last frame stays on screen through the restart gap.
+    (is-true ourro.tui:*keep-screen-on-exit*)
+    ;; The pure exit-code seam.
+    (is (= 75 (ourro.agent::perform-handoff agent)))
+    (let ((msg (sent-handoff-message buffer)))
+      (is (eq :handoff (first msg)))
+      (is (string= "gen-0003" (getf (rest msg) :generation)))
+      (is-true (getf (rest msg) :visiting))
+      (is-false (getf (rest msg) :hard)))))
+
+(test travel-hard-re-root-forwards-hard-flag
+  (with-travel-home (agent conn buffer)
+    ;; /travel hard 2 (re-root).
+    (ourro.agent::request-travel agent 2 :hard t)
+    (is (equal '(:hard t :visiting nil) (ourro.agent::agent-pending-travel agent)))
+    (is (= 75 (ourro.agent::perform-handoff agent)))
+    (let ((msg (sent-handoff-message buffer)))
+      (is (string= "gen-0002" (getf (rest msg) :generation)))
+      (is-true (getf (rest msg) :hard))
+      (is-false (getf (rest msg) :visiting)))))
+
+(test plain-generation-handoff-carries-no-travel-flags
+  ;; An evolution restart (not /travel) leaves pending-travel NIL, so the
+  ;; forwarded :handoff omits :hard/:visiting and the supervisor advances the
+  ;; current generation as before.
+  (with-travel-home (agent conn buffer)
+    (setf (ourro.agent::agent-pending-handoff agent) "gen-0007")
+    (is (= 75 (ourro.agent::perform-handoff agent)))
+    (let ((msg (sent-handoff-message buffer)))
+      (is (string= "gen-0007" (getf (rest msg) :generation)))
+      (is (null (getf (rest msg) :hard)))
+      (is (null (getf (rest msg) :visiting))))))
+
+(test read-handoff-missing-returns-nil
+  (is (null (ourro.kernel:read-handoff
+             (merge-pathnames "does-not-exist.sexp"
+                              (uiop:temporary-directory))))))
+
+(test protocol-message-parse
+  (is (equal '(:hello :generation "gen-0001")
+             (ourro.kernel::parse-protocol-message
+              "(:hello :generation \"gen-0001\")"))))
+
+(test protocol-rejects-malformed-and-unbounded-frames
+  (labels ((receive-text (text)
+             (ourro.kernel:protocol-receive
+              (make-instance 'ourro.kernel::protocol-connection
+                             :socket nil
+                             :stream (make-string-input-stream text)))))
+    (signals ourro.kernel:protocol-error (receive-text "-1\n"))
+    (signals ourro.kernel:protocol-error (receive-text "+1\nx\n"))
+    (signals ourro.kernel:protocol-error
+      (receive-text (format nil "~A~%"
+                            (1+ ourro.kernel:*max-protocol-frame-chars*))))
+    (signals ourro.kernel:protocol-error (receive-text "12\n(:heartbeat)X\n"))
+    (signals ourro.kernel:protocol-error (receive-text "23\n(:heartbeat) (:quit)\n"))
+    (signals ourro.kernel:protocol-error (receive-text "12\n(:heartbeat)!"))))
+
+(defun protocol-roundtrip (message)
+  "Send MESSAGE through an in-memory stream pair and read it back."
+  (let* ((buffer (make-string-output-stream)))
+    (ourro.kernel:protocol-send
+     (make-instance 'ourro.kernel::protocol-connection
+                    :socket nil
+                    :stream (make-two-way-stream (make-string-input-stream "")
+                                                 buffer))
+     message)
+    (ourro.kernel:protocol-receive
+     (make-instance 'ourro.kernel::protocol-connection
+                    :socket nil
+                    :stream (make-two-way-stream
+                             (make-string-input-stream
+                              (get-output-stream-string buffer))
+                             (make-broadcast-stream))))))
+
+(test protocol-frames-survive-newlines
+  ;; The regression that killed live evolution: gene source text contains
+  ;; literal newlines inside strings; line-based framing chopped the frame
+  ;; and the supervisor dropped the connection (then killed the agent as
+  ;; "hung" when heartbeats stopped arriving).
+  (let ((message (list :propose-generation
+                       :changes (list (list :path "genes/x.gene"
+                                            :content (format nil "(defgene tool/x~%  (:doc \"multi~%line\"))")))
+                       :message "evolve x")))
+    (is (equal message (protocol-roundtrip message))))
+  ;; Two frames back-to-back stay separable.
+  (let* ((buffer (make-string-output-stream))
+         (out-conn (make-instance 'ourro.kernel::protocol-connection
+                                  :socket nil
+                                  :stream (make-two-way-stream
+                                           (make-string-input-stream "")
+                                           buffer))))
+    (ourro.kernel:protocol-send out-conn (list :heartbeat))
+    (ourro.kernel:protocol-send out-conn (list :hello :pid 42))
+    (let ((in-conn (make-instance 'ourro.kernel::protocol-connection
+                                  :socket nil
+                                  :stream (make-two-way-stream
+                                           (make-string-input-stream
+                                            (get-output-stream-string buffer))
+                                           (make-broadcast-stream)))))
+      (is (equal '(:heartbeat) (ourro.kernel:protocol-receive in-conn)))
+      (is (equal '(:hello :pid 42) (ourro.kernel:protocol-receive in-conn))))))
