@@ -1,0 +1,42 @@
+(defgene tool/edit-file
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-read :filesystem-write)
+     :provenance (:seed t))
+  (:doc "Replace an exact substring in a workspace file. OLD-STRING must
+match exactly once (add surrounding context to disambiguate) unless
+REPLACE-ALL is true. This is the primary code-editing tool.")
+  (:code
+   (deftool edit-file
+       ((path :string "File to edit" :required t)
+        (old-string :string "Exact text to replace (must be unique)" :required t)
+        (new-string :string "Replacement text" :required t)
+        (replace-all :boolean "Replace every occurrence" :default nil))
+     (:doc "Replace OLD-STRING with NEW-STRING in PATH (unique match unless replace_all).")
+     (:contract (:pre ((stringp path) (stringp old-string))
+                 :post ((stringp result))))
+     (let* ((full (workspace-path path))
+            (content (cap/read-file full))
+            (updated (apply-text-edit content old-string new-string
+                                      :replace-all replace-all)))
+       (cap/write-file full updated)
+       (format nil "edited ~A" (display-path full)))))
+  (:tests
+   (test edit-file/replaces-once
+     (let ((path (workspace-path "ourro-edit-test.txt")))
+       (cap/write-file path "the quick brown fox")
+       (let ((h (make-hash-table :test (quote equal))))
+         (setf (gethash "path" h) "ourro-edit-test.txt")
+         (setf (gethash "old_string" h) "quick")
+         (setf (gethash "new_string" h) "slow")
+         (run-tool (find-tool "edit_file") h)
+         (is (string= "the slow brown fox" (cap/read-file path)))
+         (cap/delete-file path))))
+   (test edit-file/ambiguous-signals
+     (let ((path (workspace-path "ourro-edit-test2.txt")))
+       (cap/write-file path "aa aa aa")
+       (let ((h (make-hash-table :test (quote equal))))
+         (setf (gethash "path" h) "ourro-edit-test2.txt")
+         (setf (gethash "old_string" h) "aa")
+         (setf (gethash "new_string" h) "bb")
+         (signals error (run-tool (find-tool "edit_file") h)))
+       (cap/delete-file path)))))
