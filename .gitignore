@@ -1,0 +1,8 @@
+/bin/
+*.fasl
+*.core
+.DS_Store
+__pycache__/
+*.pyc
+/qa/reports/
+/qa/findings/
