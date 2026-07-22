@@ -1,0 +1,49 @@
+(defgene auto/job-sentinel
+    (:generation 1 :parent nil
+     :capabilities (:observe :llm :automate)
+     :provenance (:seed t))
+  (:doc "A reflex (M13/M15): when a background job exits non-zero, immediately
+post a non-interrupting note with the exit code and log tail, THEN request a
+background read-only investigation that diagnoses the root cause — so by your
+next message the model already knows why it failed, before you ask. :observe
+reads the job log + events, :llm runs the investigation, :automate subscribes to
+the event stream. /disarm silences it; a job exiting 0 is ignored.")
+  (:code
+   (defun sentinel-log-tail (event)
+     "The tail of the exited job's log, or a placeholder. Pure over job-status."
+     (let* ((id (pget event :job))
+            (status (and id (job-status id :peek t)))
+            (tail (pget status :tail)))
+       (if (and tail (plusp (length tail)))
+           (truncate-string tail 400)
+           "no log output captured")))
+   ;; M20: source, canonical IR, generated Lisp, proof and immutable compiled
+   ;; version are all retained.  The investigation adapter receives the exact
+   ;; triggering event as durable input and is constrained to read/observe/LLM.
+   (define-reflex job-sentinel
+     (:identity (:version 1 :workspace :current
+                 :capabilities (:filesystem-read :llm :observe)))
+     (:trigger (:kind :job-exit :exit (:not 0)))
+     (:guards ())
+     (:state (:version 1 :initial-step :brief))
+     (:workflow ((:id :brief :activity :investigate
+                  :input (:briefing-kind :job-failure) :next :done)))
+     (:policy (:approval :required :timeout 300 :concurrency 1
+               :retire-on :root-cause-removed))))
+  (:tests
+   (test job-sentinel/log-tail-handles-unknown-job
+     (is (string= "no log output captured"
+                  (sentinel-log-tail (list :job "j999" :exit 3))))
+     (is (string= "no log output captured"
+                  (sentinel-log-tail (list :exit 1)))))
+   (test job-sentinel/fires-hermetically-on-a-synthetic-event
+     (let ((effects
+             (fire-automation-for-test
+              'job-sentinel
+              (list :kind :job-exit :job "j999" :exit 3
+                    :command "make test"))))
+       (is (= 1 (length effects)))
+       (is (eq :investigate (pget (first effects) :activity))))
+     (is (null (fire-automation-for-test
+                'job-sentinel
+                (list :kind :job-exit :job "j999" :exit 0)))))))
