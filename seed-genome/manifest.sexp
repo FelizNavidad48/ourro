@@ -1,0 +1,15 @@
+(:generation 1
+ :sbcl-version "2.6.3"
+ :genes ("genes/tools/read-file.gene"
+         "genes/tools/write-file.gene"
+         "genes/tools/edit-file.gene"
+         "genes/tools/list-files.gene"
+         "genes/tools/search.gene"
+         "genes/tools/shell.gene"
+         "genes/tools/jobs.gene"
+         "genes/ui/git-branch.gene"
+         "genes/ui/evolution-hud.gene"
+         "genes/ui/jobs-hud.gene"
+         "genes/ui/context-hud.gene"
+         "genes/auto/job-sentinel.gene"
+         "genes/auto/onboard-new-repo.gene"))
