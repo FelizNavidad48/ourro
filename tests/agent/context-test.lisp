@@ -93,3 +93,61 @@ never break (a dangling call 400s the next turn)."
     (is-true (vectorp (ourro.llm::bedrock-serialize-messages compacted)))
     (is-true (ourro.llm::serialize-messages compacted))))
 
+(test maybe-compact-fires-past-threshold-and-is-noop-below
+  (let ((agent (ctx-agent)))
+    ;; Below 50% → untouched (same list object).
+    (setf (ourro.agent::agent-conversation agent) (long-conversation 12)
+          (ourro.agent::agent-last-prompt-tokens agent) 1000)
+    (let ((before (ourro.agent::agent-conversation agent)))
+      (ourro.agent::maybe-compact-conversation agent)
+      (is (eq before (ourro.agent::agent-conversation agent))))
+    ;; Past 50% → the oldest tool result is elided.
+    (setf (ourro.agent::agent-last-prompt-tokens agent) 150000)
+    (ourro.agent::maybe-compact-conversation agent)
+    (let ((tools (remove-if-not (lambda (m) (eq (pget m :role) :tool))
+                                (ourro.agent::agent-conversation agent))))
+      (is (< (length (pget (first tools) :content)) 200))
+      (is-true (canonical-pairs-ok-p (ourro.agent::agent-conversation agent))))))
+
+
+(test compaction-cut-point-lands-on-a-user-boundary
+  (let ((conv (long-conversation 8)))
+    (let ((n (ourro.agent::compaction-cut-point conv)))
+      (is (> n 0))
+      ;; the message at the cut is a user boundary
+      (is (eq :user (pget (nth n conv) :role))))))
+
+(test stage2-valid-summary-splices-as-user
+  (let* ((agent (ctx-agent))
+         (m0 (ourro.llm:user-message "old1"))
+         (m1 (ourro.llm:assistant-message (list (list :type :text :text "reply"))))
+         (m2 (ourro.llm:user-message "recent")))
+    (setf (ourro.agent::agent-conversation agent) (list m0 m1 m2)
+          ;; summarize the prefix [0,2); anchor is the retained tail head at
+          ;; index n=2 (the :user message m2) — elision-immune identity.
+          (ourro.agent::agent-pending-compaction agent)
+          (list :prefix-n 2 :anchor m2 :summary "brief"))
+    (is-true (ourro.agent::apply-pending-compaction agent))
+    (let ((conv (ourro.agent::agent-conversation agent)))
+      (is (= 2 (length conv)))
+      ;; first message is the summary, as a USER message (Converse-safe)
+      (is (eq :user (pget (first conv) :role)))
+      (is (search "brief" (pget (first conv) :content)))
+      (is (eq m2 (second conv)))
+      ;; and the Bedrock serializer's first turn is user-role
+      (let ((msgs (ourro.llm::bedrock-serialize-messages conv)))
+        (is (string= "user" (ourro.llm:json-value (aref msgs 0) "role")))))))
+
+(test stage2-stale-anchor-summary-is-dropped
+  (let ((agent (ctx-agent)))
+    (setf (ourro.agent::agent-conversation agent)
+          (list (ourro.llm:user-message "a")
+                (ourro.llm:user-message "b")
+                (ourro.llm:user-message "c"))
+          ;; anchor is an object NOT in the conversation → stale
+          (ourro.agent::agent-pending-compaction agent)
+          (list :prefix-n 2 :anchor (ourro.llm:user-message "ghost") :summary "S"))
+    (is-false (ourro.agent::apply-pending-compaction agent))
+    ;; dropped, not spliced: conversation unchanged, pending cleared
+    (is (= 3 (length (ourro.agent::agent-conversation agent))))
+    (is (null (ourro.agent::agent-pending-compaction agent)))))
