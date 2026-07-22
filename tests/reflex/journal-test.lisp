@@ -96,3 +96,86 @@
                       :workspace "/repo/b/"))))
     (signals error (ourro.reflex.journal:query-records))))
 
+(test journal-export-import-and-verifiable-delete
+  (with-scratch-journal ()
+    (let ((export (merge-pathnames "workspace.export" ourro.util::*ourro-home*)))
+      (ourro.reflex.journal:append-record (list :kind :one :unix 10)
+                                           :workspace "/repo/a/")
+      (ourro.reflex.journal:append-record (list :kind :two :unix 11)
+                                           :workspace "/repo/b/")
+      (let ((bundle (ourro.reflex.journal:export-workspace "/repo/a/" export)))
+        (is (= 1 (length (getf bundle :records)))))
+      (ourro.reflex.journal:delete-workspace "/repo/a/")
+      (is (null (ourro.reflex.journal:query-records :workspace "/repo/a/")))
+      (is (= 1 (length (ourro.reflex.journal:query-records
+                        :workspace "/repo/b/"))))
+      (is (= 1 (ourro.reflex.journal:import-workspace
+                export :expected-workspace "/repo/a/"))))))
+
+(test deletion-tombstone-survives-compaction-reopen-and-requires-reconsent
+  (with-scratch-journal ()
+    (ourro.reflex.journal:append-record (list :kind :private)
+                                       :workspace "/repo/a/")
+    (ourro.reflex.journal:delete-workspace "/repo/a/")
+    (ourro.reflex.journal:compact-journal
+     :now (+ (unix-time) (* 400 24 60 60)) :retention-seconds 1)
+    (ourro.reflex.journal:close-journal)
+    (ourro.reflex.journal:open-journal)
+    (signals error
+      (ourro.reflex.journal:append-record (list :kind :late)
+                                         :workspace "/repo/a/"))
+    ;; Local-control records are the only non-import writes admitted while a
+    ;; tombstone is closed. The policy record reopens observation explicitly.
+    (ourro.reflex.pilot:set-observation-source
+     "/repo/a/" :jobs t :retention-days 30)
+    (ourro.reflex.pilot:set-local-control-policy
+     "/repo/a/" :provider :none :retention-days 30
+     :crash-reporting nil :guided-experience t)
+    (is-true (ourro.reflex.journal:append-record
+              (list :kind :after-reconsent) :workspace "/repo/a/"))))
+
+(test legacy-event-migration-is-idempotent-with-backup
+  (with-scratch-journal ()
+    (let ((legacy (merge-pathnames "events.sexp" ourro.util::*ourro-home*)))
+      (ourro.util:append-sexp-line legacy
+                                  (list :schema 1 :kind :legacy :workspace "/repo/a/"))
+      (is (eq :migrated
+              (ourro.reflex.journal:migrate-legacy-event-file
+               legacy :workspace "/repo/a/")))
+      (is (eq :already-migrated
+              (ourro.reflex.journal:migrate-legacy-event-file
+               legacy :workspace "/repo/a/")))
+      (is (= 1 (length (ourro.reflex.journal:query-records
+                        :workspace "/repo/a/")))))))
+
+(test snapshot-authenticates-prefix-and-hydrates-only-wal-tail
+  (with-scratch-journal ()
+    (dotimes (index 100)
+      (ourro.reflex.journal:append-record
+       (list :kind :fixture :ordinal index :unix index)
+       :workspace "/repo/a/"))
+    (ourro.reflex.journal:write-journal-snapshot)
+    (dotimes (index 3)
+      (ourro.reflex.journal:append-record
+       (list :kind :tail :ordinal index :unix (+ 100 index))
+       :workspace "/repo/a/"))
+    (ourro.reflex.journal:close-journal)
+    (let ((health (ourro.reflex.journal:open-journal)))
+      (is (eq :snapshot-tail (pget health :hydration)))
+      (is (eq :valid (pget health :snapshot)))
+      (is (= 3 (pget health :tail-record-count)))
+      (is (= 103 (length (ourro.reflex.journal:query-records
+                          :workspace "/repo/a/")))))))
+
+(test journal-writes-canonical-workspace-identity-before-indexing
+  (with-scratch-journal ()
+    (let* ((workspace (merge-pathnames "workspace/" ourro.util::*ourro-home*))
+           (nested (merge-pathnames "nested/" workspace)))
+      (ensure-directories-exist (merge-pathnames "sentinel" nested))
+      (let* ((alias (merge-pathnames "../" nested))
+             (record (ourro.reflex.journal:append-record
+                      (list :kind :aliased :workspace (namestring alias)))))
+        (is (string= (ourro.reflex.journal:normalize-workspace workspace)
+                     (pget record :workspace)))
+        (is (= 1 (length (ourro.reflex.journal:query-records
+                          :workspace workspace :kind :aliased))))))))
