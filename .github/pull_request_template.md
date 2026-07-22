@@ -11,4 +11,3 @@
 
 - [ ] `make test` is green locally
 - [ ] New behaviour has a FiveAM test in `tests/`
-- [ ] No files from `docs/`, `qa/findings/`, or `qa/reports/` are included
