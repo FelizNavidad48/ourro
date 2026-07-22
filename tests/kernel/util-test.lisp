@@ -29,3 +29,32 @@
   ;; #. must not evaluate under read-safe.
   (signals error (ourro.util:read-safe-from-string "#.(+ 1 2)")))
 
+(test plist-put-is-fresh
+  (let* ((a (list :x 1))
+         (b (ourro.util:plist-put a :y 2)))
+    (is (equal (list :x 1) a))
+    (is (= 2 (getf b :y)))))
+
+(test string-helpers
+  (is (ourro.util:string-prefix-p "foo" "foobar"))
+  (is (ourro.util:string-suffix-p "bar" "foobar"))
+  (is (string= "a,b,c" (ourro.util:string-join "," '("a" "b" "c")))))
+
+(test sexp-file-roundtrip
+  (let ((path (merge-pathnames "ourro-util-test.sexp"
+                               (uiop:temporary-directory)))
+        (form (list :hello "world" :n 42)))
+    (ourro.util:write-sexp-file path form)
+    (is (equal form (ourro.util:read-sexp-file path)))
+    (ignore-errors (delete-file path))))
+
+(test append-sexp-line
+  (let ((path (merge-pathnames "ourro-append-test.sexp"
+                               (uiop:temporary-directory))))
+    (ignore-errors (delete-file path))
+    (ourro.util:append-sexp-line path '(:a 1))
+    (ourro.util:append-sexp-line path '(:b 2))
+    (with-open-file (in path)
+      (is (equal '(:a 1) (ourro.util:read-safe in)))
+      (is (equal '(:b 2) (ourro.util:read-safe in))))
+    (ignore-errors (delete-file path))))
