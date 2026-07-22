@@ -30,3 +30,32 @@
     (is (search "walker" out))
     (is (or (search "capability" out) (search "FILESYSTEM-WRITE" out)))))
 
+(test scratchpad-walker-rejects-eval-and-random
+  (is (search "walker" (ourro.agent::scratch-eval (scratch-agent) "(eval (list 1))")))
+  (is (search "walker" (ourro.agent::scratch-eval (scratch-agent) "(random 10)"))))
+
+(test scratchpad-watchdog-stops-runaway-loops
+  (let ((ourro.agent::*scratch-timeout-seconds* 0.4))
+    (let ((out (ourro.agent::scratch-eval (scratch-agent) "(loop for i from 0)")))
+      (is (search "timed out" out)))))
+
+(test scratchpad-tool-output-reads-the-ring
+  ;; (tool-output n) fetches ring entry n — the "filter a log in-image" accessor.
+  (let ((agent (scratch-agent)))
+    (setf (ourro.agent::agent-tool-results agent)
+          (list (list :n 3 :name "read_file"
+                      :result (format nil "line one~%FIXME two~%line three")
+                      :error-p nil :ms 1)))
+    (let ((out (ourro.agent::scratch-eval
+                agent
+                "(length (remove-if-not (lambda (l) (search \"FIXME\" l))
+                                        (split-lines (tool-output 3))))")))
+      (is (search "=> 1" out)))))
+
+(test scratchpad-read-error-is-clean
+  (let ((out (ourro.agent::scratch-eval (scratch-agent) "(+ 1 2")))  ; unbalanced
+    (is (stringp out))
+    (is (or (search "read error" out) (search "error" out)))))
+
+(test scratchpad-lisp-eval-tool-is-registered
+  (is-true (ourro.tools:find-tool "lisp_eval")))
