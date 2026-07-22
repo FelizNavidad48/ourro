@@ -1,0 +1,27 @@
+(defgene tool/search
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-read)
+     :provenance (:seed t))
+  (:doc "Search workspace file contents for a regular expression, returning
+path:line: text for each match. Optionally restrict to files matching a glob.")
+  (:code
+   (deftool search
+       ((regex :string "Regular expression to search for" :required t)
+        (file-pattern :string "Optional glob restricting which files are searched"
+                      :default nil)
+        (max-matches :integer "Maximum matches to return" :default 100))
+     (:doc "Grep workspace files for REGEX; returns path:line: text lines.")
+     (:contract (:pre ((stringp regex)) :post ((stringp result))))
+     (clamp-output (search-files regex :file-pattern file-pattern
+                                       :max-matches max-matches)
+                   :label "matches")))
+  (:tests
+   (test search/finds-match
+     (let ((path (workspace-path "ourro-search-test.txt")))
+       (cap/write-file path (format nil "needle here~%nothing~%"))
+       (let ((h (make-hash-table :test (quote equal))))
+         (setf (gethash "regex" h) "needle")
+         (setf (gethash "file_pattern" h) "ourro-search-test*")
+         (let ((out (run-tool (find-tool "search") h)))
+           (is (search "needle" out))))
+       (cap/delete-file path)))))
