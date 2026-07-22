@@ -1,0 +1,50 @@
+(defgene ui/evolution-hud
+    (:generation 1 :parent nil
+     :capabilities (:observe :ui)
+     :provenance (:seed t))
+  (:doc "The always-on evolution HUD: a right-aligned status-bar cell that makes
+\"is this evolving agent measurably worth it?\" answerable at a glance. It reads
+the utility ledger (UTILITY-SUMMARY) every 5 seconds and renders either
+\"Σ 14m saved · 9 genes\" once evolved genes have measured payback, or
+\"7 genes · watching\" before any savings are measured. The default chrome is
+itself a gene: the user can ask to restyle the HUD and watch it evolve through
+the gauntlet live (dogfoods M3). :observe reads the ledger; :ui registers the
+widget.")
+  (:code
+   (defun hud-duration (ms)
+     "Compact human duration for a millisecond count: 45s / 14m / 1h5m. Pure."
+     (cond ((< ms 60000) (format nil "~Ds" (round ms 1000)))
+           ((< ms 3600000) (format nil "~Dm" (round ms 60000)))
+           (t (let ((h (floor ms 3600000))
+                    (m (round (mod ms 3600000) 60000)))
+                (format nil "~Dh~Dm" h m)))))
+   (defun hud-line (summary)
+     "Render the HUD cell from a UTILITY-SUMMARY plist. Pure: empty string when
+there is no genome count (sandbox / bare boot), a payback line once savings are
+measured, otherwise a 'watching' line."
+     (let ((genes (pget summary :genes))
+           (saved (pget summary :saved-ms 0)))
+       (cond
+         ((null genes) "")
+         ((plusp saved)
+          (format nil "Σ ~A saved · ~A genes" (hud-duration saved) genes))
+         (t (format nil "~A genes · watching" genes)))))
+   (define-status-widget evolution-hud (:interval 5)
+     (hud-line (utility-summary))))
+  (:tests
+   (test evolution-hud/duration
+     (is (string= "45s" (hud-duration 45000)))
+     (is (string= "14m" (hud-duration 840000)))
+     (is (string= "1h5m" (hud-duration 3900000))))
+   (test evolution-hud/line
+     ;; No genome count (sandbox / bare boot) → an empty cell, never an error.
+     (is (string= "" (hud-line (list :saved-ms 0 :uses 0 :measured-genes 0
+                                     :genes nil))))
+     ;; Genes present but no measured savings yet → watching.
+     (is (string= "7 genes · watching"
+                  (hud-line (list :saved-ms 0 :uses 3 :measured-genes 0
+                                  :genes 7))))
+     ;; Measured savings → the Σ payback line.
+     (is (string= "Σ 14m saved · 9 genes"
+                  (hud-line (list :saved-ms 840000 :uses 20 :measured-genes 2
+                                  :genes 9)))))))
