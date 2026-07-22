@@ -59,3 +59,50 @@
       ;; q closes.
       (is (eq :close (ourro.tui:overlay-key insp #\q))))))
 
+(test inspector-undo-reverts-selected
+  (let ((agent (make-headless-agent))
+        (reverted nil))
+    ;; A live gene with a revert record (as a real hot-load would leave).
+    (ourro.kernel:record-revert-action "tool/undo-demo"
+                                      (lambda () (setf reverted t)))
+    (setf (ourro.agent::agent-candidates agent)
+          (list (list :id "r1" :status :hot-loaded :gene-name "tool/undo-demo"
+                      :pattern (list :id "p1"))))
+    (let ((insp (ourro.agent::make-evolution-inspector agent)))
+      (is (eq :handled (ourro.tui:overlay-key insp #\u)))
+      (is-true reverted)
+      (is (eq :reverted
+              (getf (first (ourro.agent::agent-candidates agent)) :status))))))
+
+(test inspector-undo-matches-by-id-after-list-rebuild
+  ;; The evolver may rebuild the candidate list with a FRESH plist for the same
+  ;; :id while the overlay is open. Undo must still update the live entry — an
+  ;; identity-based substitute would silently drop it (review #3).
+  (let ((agent (make-headless-agent))
+        (reverted nil))
+    (ourro.kernel:record-revert-action "tool/rebuilt-demo"
+                                      (lambda () (setf reverted t)))
+    (setf (ourro.agent::agent-candidates agent)
+          (list (list :id "r1" :status :hot-loaded :gene-name "tool/rebuilt-demo"
+                      :pattern (list :id "p1"))))
+    (let ((insp (ourro.agent::make-evolution-inspector agent)))
+      ;; Simulate an evolver mirror: same :id, brand-new plist object.
+      (ourro.agent::mirror-candidate-record
+       agent (list :id "r1" :status :hot-loaded :gene-name "tool/rebuilt-demo"
+                   :pattern (list :id "p1") :note "retry"))
+      (is (eq :handled (ourro.tui:overlay-key insp #\u)))
+      (is-true reverted)
+      ;; The live entry (new object) now reads :reverted, not the stale status.
+      (is (eq :reverted
+              (getf (find "r1" (ourro.agent::agent-candidates agent)
+                          :key (lambda (r) (getf r :id)) :test #'equal)
+                    :status))))))
+
+(test inspector-freeze-marks-gene-frozen
+  (let ((agent (make-headless-agent)))
+    (setf (ourro.agent::agent-candidates agent)
+          (list (list :id "r1" :status :hot-loaded :gene-name "tool/freeze-demo"
+                      :pattern (list :id "p1"))))
+    (let ((insp (ourro.agent::make-evolution-inspector agent)))
+      (is (eq :handled (ourro.tui:overlay-key insp #\f)))
+      (is-true (ourro.observe:gene-frozen-p "tool/freeze-demo")))))
