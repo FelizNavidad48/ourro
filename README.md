@@ -202,3 +202,13 @@ against a live `ourro` in a tmux sandbox, runs real-world missions, and files
 findings as GitHub issues. It's entirely contained in `qa/` and gated behind
 `OURRO_QA=1` — the product a real user sees is unchanged. See
 [`qa/README.md`](qa/README.md).
+
+## Contributing
+
+Pull requests are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for
+setup, the test gates, and how a change gets merged. Bugs go to GitHub
+issues with a reproduction.
+
+## License
+
+[MIT](LICENSE).

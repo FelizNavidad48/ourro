@@ -2,7 +2,12 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gates:
@@ -12,7 +17,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install SBCL and QA dependencies
         run: brew install sbcl tmux
+      - name: Cache Quicklisp
+        id: quicklisp-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/quicklisp
+          key: quicklisp-${{ runner.os }}-v1
       - name: Install Quicklisp
+        if: steps.quicklisp-cache.outputs.cache-hit != 'true'
         run: |
           curl --fail --silent --show-error --output /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive --load /tmp/quicklisp.lisp \

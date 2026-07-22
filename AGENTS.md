@@ -18,5 +18,9 @@ restarts.
 **Read `.claude/skills/ourro/SKILL.md` first** — architecture map and the
 gotchas (FiveAM forms, length-prefixed protocol, tool-symbol interning, tty
 redirection, pty testing). Genes live in `$OURRO_HOME/genome/`, not `src/`;
-seed copies in `seed-genome/`. Status + next steps: `docs/ROADMAP.md`;
-product requirements: `docs/greenfield-lisp-self-evolving-agent.md`.
+seed copies in `seed-genome/`. Contribution workflow: `CONTRIBUTING.md`.
+
+`docs/` is a local, untracked scratch area for plans and working notes — it
+is gitignored and never part of a commit. Anything a contributor needs must
+live in the tracked docs: `README.md`, this file, `CONTRIBUTING.md`,
+`qa/README.md`, and the two `SKILL.md` files.

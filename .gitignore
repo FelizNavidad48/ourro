@@ -1,4 +1,5 @@
 /bin/
+/docs/
 *.fasl
 *.core
 .DS_Store
