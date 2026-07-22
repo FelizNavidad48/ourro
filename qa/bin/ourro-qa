@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SBCL="${SBCL:-sbcl}"
+# Unset TMUX so ourro-qa works when invoked from inside a tmux pane (e.g. an
+# operator ourro driving a subject — qa/docs/plan-cloud-qa.md). tmux 3.5a allows
+# detached new-session under $TMUX, but older/other builds refuse nesting;
+# unsetting is harmless (the server socket is derived from the user, not $TMUX).
+exec env -u TMUX "$SBCL" --script "$HERE/ourro-qa.lisp" "$@"
