@@ -19,3 +19,18 @@
   (signals ourro.kernel:unsafe-form-error
     (ourro.kernel:safe-read-form "(a) (b)")))
 
+(test rejects-too-deep
+  (let ((ourro.kernel:*max-form-depth* 5))
+    (signals ourro.kernel:unsafe-form-error
+      (ourro.kernel:safe-read-form "(((((((((1)))))))))"))))
+
+(test rejects-too-large
+  (let ((ourro.kernel:*max-form-atoms* 10))
+    (signals ourro.kernel:unsafe-form-error
+      (ourro.kernel:safe-read-form
+       (format nil "(~{~A ~})" (loop for i below 50 collect i))))))
+
+(test interns-into-given-package
+  (let ((form (ourro.kernel:safe-read-form "(brand-new-symbol-xyz 1)"
+                                          :package (find-package :ourro.genes))))
+    (is (eq (symbol-package (first form)) (find-package :ourro.genes)))))
