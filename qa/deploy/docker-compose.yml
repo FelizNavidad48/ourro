@@ -1,0 +1,26 @@
+# Cloud QA loop on a single always-on box (qa/docs/plan-cloud-qa.md).
+#
+#   docker compose -f qa/deploy/docker-compose.yml up -d --build
+#
+# On EC2, /data is the EBS mount; the env file is written by the instance's
+# user-data from SSM Parameter Store (qa/deploy/fetch-secrets.sh) — secrets
+# are never baked into the image or this file.
+services:
+  ourro-loop:
+    build:
+      context: ../..
+      dockerfile: qa/deploy/Dockerfile
+    image: ourro-loop
+    restart: unless-stopped
+    init: true
+    env_file:
+      - /data/ourro-loop.env
+    environment:
+      OURRO_LOOP_ROOT: /data/ourro-loop
+    volumes:
+      - /data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
