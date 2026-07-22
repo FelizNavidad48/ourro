@@ -87,3 +87,51 @@
       ;; remain non-NIL and on the inherited turn trace.
       (is-true (every (lambda (context) (pget context :causation-id)) seen)))))
 
+(test mixed-batch-parallels-reads-then-runs-the-rest-serially
+  (with-fixture-tools ("r1" "r2" "w1")
+    (register-fixture-tool "r1" 250)
+    (register-fixture-tool "r2" 250)
+    (register-fixture-tool "w1" 250 :caps '(:filesystem-write))
+    (let* ((agent (fresh-agent))
+           ;; [r1 r2] run together; w1 is serial after them.
+           (calls (list (tc "c1" "r1") (tc "c2" "r2") (tc "c3" "w1")))
+           (start (get-internal-real-time))
+           (results (ourro.agent::run-tool-calls agent calls))
+           (elapsed (ourro.agent::elapsed-ms start (get-internal-real-time))))
+      ;; ~250 (parallel reads) + ~250 (serial w1) ≈ 500, not 750.
+      (is (< elapsed 700))
+      (is (equal '("c1" "c2" "c3") (result-ids results))))))
+
+(test single-eligible-call-takes-the-serial-path
+  ;; A batch of one is never parallelized — today's exact path.
+  (with-fixture-tools ("solo")
+    (register-fixture-tool "solo" 1)
+    (let* ((agent (fresh-agent))
+           (results (ourro.agent::run-tool-calls agent (list (tc "c1" "solo")))))
+      (is (equal '("c1") (result-ids results)))
+      (is (string= "solo" (pget (first results) :content))))))
+
+(test cancel-before-batch-synthesizes-cancelled-for-all
+  (with-fixture-tools ("s1")
+    (register-fixture-tool "s1" 1)
+    (let ((agent (fresh-agent)))
+      (setf (ourro.agent::agent-cancel-requested agent) t)
+      (let ((results (ourro.agent::run-tool-calls
+                      agent (list (tc "c1" "s1") (tc "c2" "s1") (tc "c3" "s1")))))
+        (is (= 3 (length results)))
+        (is (equal '("c1" "c2" "c3") (result-ids results)))
+        (is (every (lambda (m) (pget m :error-p)) results))
+        (is (every (lambda (m) (search "cancelled" (pget m :content))) results))))))
+
+(test parallel-batch-cancel-mid-join-synthesizes-unfinished
+  ;; A cancel active while a parallel batch is joining: the join bails out and
+  ;; every still-running call gets a synthesized cancelled result (read-only
+  ;; orphans are harmless). Deterministic because cancel is set up front.
+  (with-fixture-tools ("slow_c")
+    (register-fixture-tool "slow_c" 500)
+    (let ((agent (fresh-agent)))
+      (setf (ourro.agent::agent-cancel-requested agent) t)
+      (let ((results (ourro.agent::run-parallel-tool-batch
+                      agent (list (tc "c1" "slow_c") (tc "c2" "slow_c")))))
+        (is (equal '("c1" "c2") (result-ids results)))
+        (is (every (lambda (m) (search "cancelled" (pget m :content))) results))))))
