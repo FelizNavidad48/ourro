@@ -234,3 +234,243 @@
       (is-false (ourro.automation:find-automation "bad"))
       (ourro.kernel:clear-revert-records "g/bad"))))
 
+(test three-strikes-post-probation-reverts
+  (with-clean-reflexes
+    (let* ((amber 0)
+           (ourro.kernel:*probation-failure-hook*
+             (lambda (gene c) (declare (ignore gene c)) (incf amber))))
+      (reg-automation "flaky" '(:kind :ping)
+                      (lambda (e) (declare (ignore e)) (error "boom"))
+                      :gene "g/flaky")
+      ;; Not on probation → errors accumulate strikes; the 3rd retires it.
+      (let ((a (ourro.automation:find-automation "flaky")))
+        (dotimes (i 3)
+          (ourro.automation::run-firing
+           (ourro.automation::make-firing a '(:kind :ping) :ping))))
+      (is (= 1 amber))
+      (is-false (ourro.automation:find-automation "flaky"))
+      (ourro.kernel:clear-revert-records "g/flaky"))))
+
+(test firing-timeout-accrues-a-strike-not-silently-lost
+  ;; A firing that exceeds the watchdog is a SERIOUS-CONDITION, not an ERROR;
+  ;; run-firing must convert it so it strikes (and logs) rather than vanishing.
+  (with-clean-reflexes
+    (let ((ourro.automation:*automation-timeout-seconds* 0.05))
+      (reg-automation "slow" '(:kind :ping)
+                      (lambda (e) (declare (ignore e)) (sleep 0.5))
+                      :gene "g/slow")
+      (let ((a (ourro.automation:find-automation "slow")))
+        (ourro.automation::run-firing
+         (ourro.automation::make-firing a '(:kind :ping) :ping))
+        (is (= 1 (ourro.automation:automation-strikes a)))))))
+
+(test firing-timeout-under-probation-reverts
+  (with-clean-reflexes
+    (let* ((ourro.automation:*automation-timeout-seconds* 0.05)
+           (reverted nil)
+           (ourro.kernel:*probation-failure-hook*
+             (lambda (g c) (declare (ignore g c)) (setf reverted t))))
+      (reg-automation "slowp" '(:kind :ping)
+                      (lambda (e) (declare (ignore e)) (sleep 0.5))
+                      :gene "g/slowp")
+      (ourro.kernel:start-probation "g/slowp")
+      (ourro.automation::run-firing
+       (ourro.automation::make-firing (ourro.automation:find-automation "slowp")
+                                     '(:kind :ping) :ping))
+      ;; A probation-phase hang reverts immediately, exactly like an error.
+      (is-true reverted)
+      (is-false (ourro.automation:find-automation "slowp"))
+      (ourro.kernel:clear-revert-records "g/slowp"))))
+
+
+(test walker-requires-automate-capability
+  ;; DEFINE-AUTOMATION without :automate → a violation; with it → clean.
+  (is-true (ourro.kernel:lint-gene-body
+            '((define-automation x (:on (:kind :foo)) (post-note "hi")))
+            :capabilities '(:observe)))
+  (is-false (ourro.kernel:lint-gene-body
+             '((define-automation x (:on (:kind :foo)) (post-note "hi")))
+             :capabilities '(:observe :automate))))
+
+(test walker-allows-keywords-named-like-forbidden-operators
+  ;; A trigger pattern's :exit / :load / :search key is inert data, never a call
+  ;; to EXIT / LOAD / SEARCH — the walker must not reject it (regression: the
+  ;; sentinel's (:exit (:not 0)) tripped the forbidden-name rule).
+  (is-false (ourro.kernel:lint-gene-body
+             '((define-automation r
+                   (:on (:kind :job-exit :exit (:not 0) :load 1 :search "x"))
+                 (post-note "x")))
+             :capabilities '(:observe :automate))))
+
+(test structure-check-rejects-malformed-triggers
+  ;; No :on pattern.
+  (is-true (ourro.verify::validate-automation-form
+            '(define-automation x () (post-note "hi"))))
+  ;; No :kind and not idle/every.
+  (is-true (ourro.verify::validate-automation-form
+            '(define-automation x (:on (:tool "edit")) (post-note "hi"))))
+  ;; Empty body.
+  (is-true (ourro.verify::validate-automation-form
+            '(define-automation x (:on (:kind :job-exit)))))
+  ;; Well-formed → NIL (no problem).
+  (is-false (ourro.verify::validate-automation-form
+             '(define-automation x (:on (:kind :job-exit) :cooldown 10)
+               (post-note "hi"))))
+  (is-false (ourro.verify::validate-automation-form
+             '(define-automation x (:on (:idle 300)) (post-note "hi")))))
+
+
+(test ledger-counts-automation-firings
+  (with-clean-reflexes
+    (ourro.observe::record-gene-use-from-event
+     '(:kind :automation-fire :gene "g/reflex" :elapsed-ms 5 :outcome :ok))
+    (ourro.observe::record-gene-use-from-event
+     '(:kind :automation-fire :gene "g/reflex" :elapsed-ms 7 :outcome :error))
+    (is (= 1 (ourro.observe:gene-uses "g/reflex")))
+    (is (= 1 (pget (ourro.observe:gene-utility "g/reflex") :errors)))))
+
+
+(test post-note-queues-and-tickers
+  (with-clean-reflexes
+    (let* ((tickered nil)
+           (ourro.automation:*note-sink*
+             (lambda (text style) (declare (ignore style)) (setf tickered text))))
+      (ourro.automation:post-note "server died" :style :warning)
+      (is (string= "server died" tickered))          ; ticker channel
+      (is (= 1 (ourro.automation:pending-note-count)))
+      (is (equal '("server died") (ourro.automation:drain-notes)))  ; message channel
+      (is (zerop (ourro.automation:pending-note-count))))))
+
+
+
+(defun ev-tool (tool args &optional (ms 100))
+  (call-event tool args ms))
+
+(defun ev-jobexit (id exit)
+  (list :kind :job-exit :job id :exit exit :time (ourro.util:iso-time)))
+
+
+(test mine-reactions-finds-a-b-pairs-and-derives-the-trigger
+  (let* ((oldest (loop repeat 3
+                       append (list (ev-tool "edit_file" '(:path "a.lisp"))
+                                    (ev-tool "shell" '(:command "make test") 500))))
+         (pats (ourro.miner:mine-reactions (reverse oldest))))   ; recent-events order
+    (is (= 1 (length pats)))
+    (let ((p (first pats)))
+      (is (eq :reaction (pget p :kind)))
+      (is (equal '("shell") (pget p :tools)))
+      (is (eq :tool-call (pget (pget p :trigger-shape) :kind)))
+      (is (string= "edit_file" (pget (pget p :trigger-shape) :tool)))
+      ;; the constant :path is kept in the derived trigger (skeleton derivation)
+      (is (equal '(:path "a.lisp") (pget (pget p :trigger-shape) :args)))
+      ;; benefit-to-beat is the measured mean B cost, not a guess
+      (is (= 500 (pget p :occurrence-cost-ms))))))
+
+(test mine-reactions-counts-independent-episodes-not-triggers
+  ;; Three edits before ONE test run is ONE reaction episode, not three — each
+  ;; B is consumed once, so support < threshold and nothing is mined (review F1).
+  (let* ((oldest (list (ev-tool "edit_file" '(:path "a.lisp"))
+                       (ev-tool "edit_file" '(:path "b.lisp"))
+                       (ev-tool "edit_file" '(:path "c.lisp"))
+                       (ev-tool "shell" '(:command "make test") 500)))
+         (pats (ourro.miner:mine-reactions (reverse oldest))))
+    (is (null pats))))
+
+(test mine-reactions-job-exit-as-trigger
+  (let* ((oldest (loop repeat 3
+                       append (list (ev-jobexit "j1" 1)
+                                    (ev-tool "read_file" '(:path "log.txt")))))
+         (pats (ourro.miner:mine-reactions (reverse oldest))))
+    (is (= 1 (length pats)))
+    (is (equal '(:kind :job-exit :exit (:not 0))
+               (pget (first pats) :trigger-shape)))))
+
+(test mine-reactions-respects-the-window
+  (let ((ourro.miner:*reaction-window* 2))
+    ;; A job-exit A, then two non-tool events, then the tool-call B at offset 3
+    ;; (> window 2) → no pair mined.
+    (let ((oldest (loop repeat 3
+                        append (list (ev-jobexit "j" 1)
+                                     (list :kind :other :time "t")
+                                     (list :kind :other :time "t")
+                                     (ev-tool "read_file" '(:path "x"))))))
+      (is (null (ourro.miner:mine-reactions (reverse oldest)))))))
+
+(test reaction-signature-includes-the-trigger-shape
+  ;; Two reactions with the same action but different triggers are distinct.
+  (let ((a (list :kind :reaction :tools '("shell")
+                 :trigger-shape '(:kind :tool-call :tool "edit_file")))
+        (b (list :kind :reaction :tools '("shell")
+                 :trigger-shape '(:kind :tool-call :tool "write_file"))))
+    (is (not (string= (ourro.miner:pattern-signature a)
+                      (ourro.miner:pattern-signature b))))))
+
+
+(defparameter +auto-gene-src+
+  "(defgene x/reflex (:capabilities (:observe :automate) :provenance (:seed nil))
+     (:doc \"d\")
+     (:code (define-automation r (:on (:kind :job-exit)) (post-note \"hi\")))
+     (:tests (test t1 (is (= 1 1)))))")
+
+(defun make-candidate (gene-source origin)
+  (let ((c (make-instance 'ourro.evolve:evolution-candidate
+                          :pattern (list :origin origin))))
+    (setf (ourro.evolve:candidate-gene c) (ourro.genome:parse-gene-source gene-source)
+          (ourro.evolve:candidate-status c) :verified)
+    c))
+
+(test should-stage-only-mined-automation-candidates
+  (let ((auto (make-candidate +auto-gene-src+ :mined))
+        (tool (make-candidate (ourro.evolve:extract-gene-block +proposed-gene+) :mined))
+        (delib (make-candidate +auto-gene-src+ :deliberate)))
+    (is-true (ourro.evolve:candidate-registers-automations-p auto))
+    (is-false (ourro.evolve:candidate-registers-automations-p tool))
+    ;; a mined reflex stages; a mined tool applies; a deliberate reflex applies.
+    (is-true (ourro.evolve:should-stage-p auto))
+    (is-false (ourro.evolve:should-stage-p tool))
+    (is-false (ourro.evolve:should-stage-p delib))))
+
+
+(test ticker-command-for-key-dispatches-triples
+  (let ((actions '((#\y "y install" :install-staged)
+                   (#\n "n dismiss" :dismiss-staged))))
+    (is (eq :install-staged (ourro.agent::ticker-command-for-key actions #\y)))
+    (is (eq :dismiss-staged (ourro.agent::ticker-command-for-key actions #\n)))
+    (is (null (ourro.agent::ticker-command-for-key actions #\z)))
+    ;; legacy plain-string actions stay display-only (no key dispatch)
+    (is (null (ourro.agent::ticker-command-for-key '("e explain") #\e)))
+    ;; case-sensitive (review F2): capital E stays an ordinary character
+    (is (eq :install-staged (ourro.agent::ticker-command-for-key actions #\y)))
+    (is (null (ourro.agent::ticker-command-for-key actions #\Y)))))
+
+(test ticker-action-label-handles-strings-and-triples
+  (is (string= "y install" (ourro.tui::ticker-action-label '(#\y "y install" :x))))
+  (is (string= "e explain" (ourro.tui::ticker-action-label "e explain"))))
+
+
+(test workspace-memory-round-trip
+  (with-evo-home
+    (is-false (ourro.observe:workspace-known-p "/repo/a"))
+    (ourro.observe:remember-workspace "/repo/a")
+    (is-true (ourro.observe:workspace-known-p "/repo/a"))
+    (is-false (ourro.observe:workspace-known-p "/repo/b"))
+    ;; idempotent
+    (ourro.observe:remember-workspace "/repo/a")
+    (is-true (ourro.observe:workspace-known-p "/repo/a"))))
+
+(test tick-fires-idle-once-per-idle-stretch
+  (with-clean-reflexes
+    (reg-automation "idler" '(:idle 300) (lambda (e) (declare (ignore e))))
+    ;; Below the threshold: nothing, and it stays armed.
+    (ourro.automation:tick-automations 100)
+    (is (zerop (ourro.automation:firing-queue-length)))
+    ;; Past the threshold: one firing.
+    (ourro.automation:tick-automations 400)
+    (is (= 1 (ourro.automation:firing-queue-length)))
+    ;; Still idle: it does NOT re-fire (armed only once per idle stretch).
+    (ourro.automation:tick-automations 500)
+    (is (= 1 (ourro.automation:firing-queue-length)))
+    ;; Activity resets idle, re-arming; a later idle fires again.
+    (ourro.automation:tick-automations 10)
+    (ourro.automation:tick-automations 400)
+    (is (= 2 (ourro.automation:firing-queue-length)))))
