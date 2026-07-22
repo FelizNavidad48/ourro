@@ -121,3 +121,94 @@
       (ourro.jobs::mark-exited "j8" :again)
       (is (= 1 hook-count)))))
 
+(test jobs-kill-terminates-process-group
+  (with-jobs-home
+    (let ((id (ourro.jobs:start-job "sleep 30 & wait")))
+      (let* ((job (ourro.jobs:job-record id))
+             (pid (pget job :pid)))
+        (is (= pid (pget job :pgid)))
+        (is (stringp (pget job :identity)))
+        (is (eq :killed (ourro.jobs:job-kill id)))
+        (is (wait-until (lambda () (job-done-p id)) 5))))))
+
+(test jobs-reattach-does-not-reuse-ids
+  ;; After re-attaching j7 (a running job whose pid is now dead → exited-unknown),
+  ;; a freshly started job must not collide with it: the id counter is bumped.
+  (with-jobs-home
+    (ourro.jobs:restore-jobs
+     (list (list :id "j7" :command "x" :pid 999999 :log "/tmp/n.log"
+                 :started 0 :status :running :exit nil)))
+    (let ((id (ourro.jobs:start-job "true")))
+      (is (not (string= "j7" id)))
+      (is (wait-until (lambda () (job-done-p id)) 5)))))
+
+(test jobs-restore-drops-already-exited
+  ;; An already-exited job is not carried across a restart (bounded growth).
+  (with-jobs-home
+    (ourro.jobs:restore-jobs
+     (list (list :id "j3" :command "old" :pid 999999 :log "/tmp/n.log"
+                 :started 0 :status :exited :exit 0)))
+    (is (null (ourro.jobs:list-jobs)))))
+
+(test jobs-exit-note-queued-and-drained
+  (with-jobs-home
+    (let ((id (ourro.jobs:start-job "exit 1")))
+      (is (wait-until (lambda () (job-done-p id)) 5))
+      (let ((notes (ourro.jobs:drain-exit-notes)))
+        (is (= 1 (length notes)))
+        (is (search (format nil "job ~A" id) (first notes)))
+        (is (search "exited 1" (first notes))))
+      ;; drained once — the next drain is empty
+      (is (null (ourro.jobs:drain-exit-notes))))))
+
+(test jobs-exit-note-prefixes-next-user-message
+  ;; The note reaches the model prefixed to the next user message (M9-4),
+  ;; ordered before the user's own text; a later message carries no stale note.
+  (with-jobs-home
+    (let ((agent (ourro.agent::make-agent
+                  :provider (ourro.llm:make-scripted-provider (list "ok" "ok2")))))
+      (let ((id (ourro.jobs:start-job "exit 1")))
+        (is (wait-until (lambda () (job-done-p id)) 5)))
+      (ourro.agent::submit-message agent "status?")
+      (ourro.agent::submit-message agent "again?")
+      (let ((users (remove-if-not
+                    (lambda (m) (eq (pget m :role) :user))
+                    (ourro.agent::agent-conversation agent))))
+        (is (= 2 (length users)))
+        (let ((first-text (pget (first users) :content)))
+          (is (search "status?" first-text))
+          (is (search "exited 1" first-text))
+          (is (< (search "exited 1" first-text) (search "status?" first-text))))
+        ;; the note was drained — the second user message is clean
+        (is (null (search "exited" (pget (second users) :content))))))))
+
+(test jobs-kill-all-reaps-running
+  (with-jobs-home
+    (let ((id (ourro.jobs:start-job "sleep 30")))
+      (is (eq :running (pget (ourro.jobs:job-record id) :status)))
+      (let ((killed (ourro.jobs:kill-all-jobs)))
+        (is (member id killed :test #'string=)))
+      (is (wait-until (lambda () (job-done-p id)) 5)))))
+
+(test jobs-summary-counts-running
+  (with-jobs-home
+    (is (zerop (pget (ourro.jobs:jobs-summary) :running)))
+    (let ((id (ourro.jobs:start-job "sleep 30")))
+      (declare (ignore id))
+      (is (= 1 (pget (ourro.jobs:jobs-summary) :running)))
+      (is (= 1 (pget (ourro.jobs:jobs-summary) :total))))))
+
+(test jobs-persist-and-restore-from-disk
+  ;; The state/jobs.sexp mirror is what a crash-resume re-attaches from.
+  (with-jobs-home
+    (let ((id (ourro.jobs:start-job "sleep 30")))
+      (is (eq :running (pget (ourro.jobs:job-record id) :status)))
+      ;; simulate a fresh image: drop in-memory state, then re-attach from disk
+      (let ((pid (pget (ourro.jobs:job-record id) :pid)))
+        (ourro.jobs:reset-jobs)
+        (is (null (ourro.jobs:list-jobs)))
+        (ourro.jobs:restore-jobs-from-disk)
+        (let ((j (ourro.jobs:job-record id)))
+          (is-true j)
+          (is (eql pid (pget j :pid)))
+          (is (eq :running (pget j :status))))))))
