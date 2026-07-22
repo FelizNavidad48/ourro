@@ -40,3 +40,37 @@
     ;; After revert, the original definition is restored.
     (is (eq :original (ourro-revert-target)))))
 
+(test probation-graduates-on-success
+  (ourro.kernel:start-probation "test/grad" 2)
+  (is (= 2 (ourro.kernel::probation-remaining "test/grad")))
+  (ourro.kernel:with-probation ("test/grad") 1)
+  (is (= 1 (ourro.kernel::probation-remaining "test/grad")))
+  (ourro.kernel:with-probation ("test/grad") 1)
+  (is (= 0 (ourro.kernel::probation-remaining "test/grad"))))
+
+(test gene-snapshot-restores-variable-and-class-shape
+  (let* ((source
+           "(defgene test/class-transaction
+                (:generation 1 :capabilities ())
+              (:doc \"transaction fixture\")
+              (:code
+               (defparameter ourro.tests::*qc-revert-value* :new)
+               (defclass ourro.tests::qc-revert-class ()
+                 ((y :initform 2 :accessor ourro.tests::qc-revert-y))))
+              (:tests (test class-transaction/t (is-true t))))")
+         (gene (ourro.genome:parse-gene-source source))
+         (instance (make-instance 'qc-revert-class)))
+    (setf *qc-revert-value* :old)
+    (ourro.genome::snapshot-gene-targets gene)
+    (setf *qc-revert-value* :new)
+    (sb-mop:ensure-class
+     'qc-revert-class :direct-superclasses (list (find-class t))
+     :direct-slots (list (list :name 'y :initform 2
+                               :initfunction (constantly 2)
+                               :readers '(qc-revert-y))))
+    (is (eq :new *qc-revert-value*))
+    (ourro.kernel:revert-gene-definitions "test/class-transaction")
+    (is (eq :old *qc-revert-value*))
+    (is (= 1 (qc-revert-x instance)))
+    (is (find 'x (sb-mop:class-direct-slots (find-class 'qc-revert-class))
+              :key #'sb-mop:slot-definition-name))))
