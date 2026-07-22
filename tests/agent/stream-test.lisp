@@ -79,3 +79,87 @@
                      (ourro.tui:view-statusbar (ourro.agent::agent-view agent)))
                     "")))))
 
+(test first-delta-clears-thinking-activity
+  ;; "reasoning…" must not linger once visible text starts streaming (review #5).
+  (let ((agent (ourro.agent::make-agent
+                :provider (ourro.llm:make-scripted-provider '()))))
+    (ourro.agent::stream-event agent (list :kind :thinking))
+    (ourro.agent::stream-event agent (list :kind :delta :text "answer"))
+    (is (null (ourro.tui:statusbar-activity
+               (ourro.tui:view-statusbar (ourro.agent::agent-view agent)))))))
+
+
+(defun span-with-style-p (agent style needle)
+  (some (lambda (line)
+          (some (lambda (span)
+                  (and (consp span) (eq (car span) style)
+                       (search needle (cdr span))))
+                line))
+        (ourro.tui:transcript-lines
+         (ourro.tui:view-transcript (ourro.agent::agent-view agent)))))
+
+(test streaming-tail-renders-markdown-heading
+  (let ((agent (ourro.agent::make-agent
+                :provider (ourro.llm:make-scripted-provider '()))))
+    (ourro.agent::stream-event agent (list :kind :delta :text "# Title"))
+    (is-true (span-with-style-p agent :accent "Title"))))
+
+(test streaming-tail-unclosed-fence-is-code
+  ;; An unclosed ``` fence mid-stream renders its body as :code (it will be).
+  (let ((agent (ourro.agent::make-agent
+                :provider (ourro.llm:make-scripted-provider '()))))
+    (ourro.agent::stream-event agent
+                              (list :kind :delta
+                                    :text (format nil "```~%(defun f ())")))
+    (is-true (span-with-style-p agent :code "defun"))))
+
+(test streaming-cursor-on-last-line-only
+  (let ((agent (ourro.agent::make-agent
+                :provider (ourro.llm:make-scripted-provider '()))))
+    (ourro.agent::stream-event agent
+                              (list :kind :delta
+                                    :text (format nil "line one~%line two")))
+    (let* ((lines (ourro.tui:transcript-lines
+                   (ourro.tui:view-transcript (ourro.agent::agent-view agent))))
+           (last-line (car (last lines))))
+      (flet ((has-cursor (line)
+               (some (lambda (s) (and (consp s) (search "▌" (cdr s)))) line)))
+        (is-true (has-cursor last-line))
+        (is (notany (lambda (line) (and (not (eq line last-line))
+                                        (has-cursor line)))
+                    lines))))))
+
+(test streaming-final-equals-tail-minus-cursor
+  ;; The proof that there is no pop-in: the last streamed frame is identical to
+  ;; the finalized render once the ▌ cursor is stripped.
+  (let ((agent (ourro.agent::make-agent
+                :provider (ourro.llm:make-scripted-provider '())))
+        (msg (format nil "# Heading~%~%some **bold** text and `code`")))
+    (ourro.agent::stream-event agent (list :kind :delta :text msg))
+    (let ((tail-text (remove #\▌ (agent-transcript-text agent))))
+      (ourro.agent::finish-stream agent msg)
+      (is (string= tail-text (agent-transcript-text agent))))))
+
+;; A provider that streams a couple of tokens and THEN signals a provider-error,
+;; to exercise the mid-stream failure path in PROCESS-TURN (review #1).
+(defclass stream-then-error-provider (ourro.llm:provider) ())
+
+(defmethod ourro.llm:complete ((p stream-then-error-provider) system messages tools
+                              &key on-event)
+  (declare (ignore system messages tools))
+  (when on-event
+    (funcall on-event (list :kind :delta :text "partial "))
+    (funcall on-event (list :kind :delta :text "answer")))
+  (error 'ourro.llm:provider-error :message "connection reset"))
+
+(test provider-error-mid-stream-keeps-error-line
+  ;; The unwind-protect cleanup rebuilds from the stream head; the error line
+  ;; must survive it, and the partial text must be finalized (cursor gone).
+  (let ((agent (ourro.agent::make-agent
+                :provider (make-instance 'stream-then-error-provider))))
+    (ourro.agent::process-turn agent)
+    (let ((text (agent-transcript-text agent)))
+      (is (search "partial answer" text))          ; partial stream finalized
+      (is (search "provider error: connection reset" text))
+      (is (null (search "▌" text))))               ; no dangling cursor
+    (is-false (ourro.agent::agent-stream-start agent))))
