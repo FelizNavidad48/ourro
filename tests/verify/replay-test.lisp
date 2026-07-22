@@ -27,3 +27,26 @@
   (is-false (ourro.verify:kernel-touching-p
              "(defun add (a b) (+ a b))")))
 
+(test kernel-gene-cannot-be-applied
+  ;; Even if a candidate somehow verified, apply-candidate refuses kernel
+  ;; references (defense in depth over the walker).
+  (let ((candidate (make-instance 'ourro.evolve:evolution-candidate
+                                  :pattern '(:id "k")
+                                  :status :verified
+                                  :source "(defgene x (:generation 2) (:code (defun q () ourro.kernel::foo)))")))
+    (setf (ourro.evolve:candidate-status candidate) :verified)
+    (ourro.evolve:apply-candidate candidate :force t)
+    (is (eq :rejected (ourro.evolve:candidate-status candidate)))))
+
+(test replay-session-skips-effectful-tools
+  ;; Only read-ish tools are replayed; a shell event is skipped.
+  (let ((events (list (list :kind :tool-call :tool "shell"
+                            :args '(:command "rm -rf /"))
+                      (list :kind :tool-call :tool "list_files"
+                            :args '(:pattern "*.nonexistent")))))
+    (let ((ourro.toolkit:*workspace* (uiop:temporary-directory)))
+      (ourro.kernel:with-capabilities ourro.kernel:+all-capabilities+
+        (let ((traces (ourro.verify:replay-session events)))
+          ;; Only the list_files call replayed.
+          (is (= 1 (length traces)))
+          (is (string= "list_files" (getf (first traces) :tool))))))))
