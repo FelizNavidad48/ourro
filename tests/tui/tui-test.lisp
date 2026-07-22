@@ -117,3 +117,138 @@
       (is (= 4 column)))
     (is-false (ourro.tui:input-move-line input :up))))
 
+(test input-pane-renders-multiline
+  (let ((input (make-instance 'ourro.tui:input-pane)))
+    (ourro.tui:input-insert input (format nil "one~%two"))
+    (is (= 2 (length (ourro.tui:render-component input 40))))))
+
+(test slash-command-ghost-suggestion
+  (let ((input (make-instance 'ourro.tui:input-pane)))
+    (ourro.tui:input-insert input "/he")
+    (ourro.agent::update-suggestion input)
+    (is (string= "lp" (ourro.tui:input-suggestion input)))
+    ;; Tab-accept completes the command.
+    (ourro.agent::accept-suggestion input)
+    (is (string= "/help" (ourro.tui:input-text input)))))
+
+
+(defun strip-ansi (string)
+  (cl-ppcre:regex-replace-all (format nil "~C\\[[0-9;]*m" #\Esc) string ""))
+
+(test char-display-widths
+  (is (= 1 (ourro.tui:char-display-width #\a)))
+  (is (= 2 (ourro.tui:char-display-width (code-char #x26A1))))   ; ⚡ high voltage
+  (is (= 2 (ourro.tui:char-display-width (code-char #x4E2D))))   ; 中 CJK
+  (is (= 0 (ourro.tui:char-display-width (code-char #x0301)))))  ; combining acute
+
+(test display-width-of-mixed-string
+  ;; "a中b" = 1 + 2 + 1 = 4 columns from 3 characters.
+  (is (= 4 (ourro.tui:display-width (format nil "a~Ab" (code-char #x4E2D)))))
+  ;; a base letter plus a combining mark occupies one column.
+  (is (= 1 (ourro.tui:display-width (format nil "e~A" (code-char #x0301))))))
+
+(test take-columns-never-splits-wide-char
+  (multiple-value-bind (prefix cols)
+      (ourro.tui:take-columns (format nil "a~Ab" (code-char #x4E2D)) 2)
+    ;; "a" fits (1 col); 中 would reach 3 > 2, so stop — prefix "a", 1 column.
+    (is (string= "a" prefix))
+    (is (= 1 cols))))
+
+(test fit-pads-and-truncates-by-columns
+  ;; Padding a 3-column string into 6 columns yields exactly 6 columns.
+  (is (= 6 (ourro.tui:display-width (ourro.tui::fit "abc" 6))))
+  ;; Fitting "a中" into 2 columns drops the straddling 中 and pads → "a ".
+  (let ((fitted (ourro.tui::fit (format nil "a~A" (code-char #x4E2D)) 2)))
+    (is (= 2 (ourro.tui:display-width fitted)))
+    (is (string= "a " fitted))))
+
+(test truncate-styled-line-respects-column-budget
+  (let* ((wide (format nil "~A~A~A" (code-char #x4E2D)
+                       (code-char #x4E2D) (code-char #x4E2D)))
+         (line (list (ourro.tui:styled :assistant wide)))
+         (visible (strip-ansi (ourro.tui::truncate-styled-line line 3))))
+    ;; three wide chars = 6 cols; budget 3 → exactly one 中 (2 cols) fits.
+    (is (= 2 (ourro.tui:display-width visible)))))
+
+(test cjk-line-wraps-by-columns
+  ;; Space-separated wide chars (each 2 cols) wrapped to width 3 → one per line.
+  (let* ((cjk (format nil "~A ~A ~A ~A"
+                      (code-char #x4E2D) (code-char #x6587)
+                      (code-char #x6D4B) (code-char #x8BD5)))
+         (lines (ourro.tui:wrap-text cjk 3)))
+    (is (> (length lines) 1))
+    (is (every (lambda (l) (<= (ourro.tui:display-width l) 3)) lines))))
+
+
+(test decode-sgr-mouse-wheel
+  (with-key-stream ((esc-seq "[<64;10;5M"))
+    (is (eq :wheel-up (ourro.tui:read-key))))
+  (with-key-stream ((esc-seq "[<65;10;5M"))
+    (is (eq :wheel-down (ourro.tui:read-key))))
+  ;; A left-click (button 0) is a no-op :mouse — never :escape.
+  (with-key-stream ((esc-seq "[<0;3;4M"))
+    (is (eq :mouse (ourro.tui:read-key)))))
+
+(test decode-sgr-mouse-consumes-fully
+  ;; The whole SGR sequence is consumed; the following key decodes normally.
+  (with-key-stream ((concatenate 'string (esc-seq "[<0;3;4M") "x"))
+    (is (eq :mouse (ourro.tui:read-key)))
+    (is (eql #\x (ourro.tui:read-key)))))
+
+(test decode-x10-mouse-consumes-three-bytes
+  ;; ESC [ M then exactly 3 bytes (button+32, x+32, y+32). Button 64 → wheel-up.
+  (with-key-stream ((concatenate 'string (esc-seq "[M")
+                                 (string (code-char 96))    ; button 64
+                                 (string (code-char 33))    ; x
+                                 (string (code-char 33))    ; y
+                                 "z"))
+    (is (eq :wheel-up (ourro.tui:read-key)))
+    (is (eql #\z (ourro.tui:read-key)))))
+
+(test adjust-scroll-pins-and-clamps
+  (is (= 0 (ourro.tui:adjust-scroll-for-append 0 5 100 20)))    ; bottom stays bottom
+  (is (= 15 (ourro.tui:adjust-scroll-for-append 10 5 100 20)))  ; pin: add the growth
+  (is (= 10 (ourro.tui:adjust-scroll-for-append 40 -30 30 20))) ; clamp on shrink
+  (is (= 80 (ourro.tui:adjust-scroll-for-append 90 0 100 20)))) ; clamp to max-scroll
+
+(test statusbar-shows-scroll-indicator
+  (let ((sb (make-instance 'ourro.tui:statusbar-pane :scrolled 12)))
+    (is (search "↑12"
+                (with-output-to-string (out)
+                  (dolist (span (first (ourro.tui:render-component sb 80)))
+                    (write-string (cdr span) out)))))))
+
+(test statusbar-busy-segment-never-prints-nil
+  ;; F-worknil regression: spinner with no activity must not render " · NIL";
+  ;; activity with no spinner must still render (it was dropped entirely);
+  ;; both present join with " · ".
+  (flet ((row (sb)
+           (with-output-to-string (out)
+             (dolist (span (first (ourro.tui:render-component sb 80)))
+               (write-string (cdr span) out)))))
+    (let ((text (row (make-instance 'ourro.tui:statusbar-pane
+                                    :spinner "⠹ working…"))))
+      (is (search "working…" text))
+      (is (not (search "NIL" text))))
+    (is (search "working… · evolving"
+                (row (make-instance 'ourro.tui:statusbar-pane
+                                    :spinner "⠹ working…"
+                                    :activity "evolving"))))
+    (is (search "evolving"
+                (row (make-instance 'ourro.tui:statusbar-pane
+                                    :activity "evolving"))))))
+
+(test end-key-jumps-to-bottom-when-scrolled
+  (let* ((agent (ourro.agent::make-agent
+                 :provider (ourro.llm:make-scripted-provider '())))
+         (input (ourro.tui:view-input (ourro.agent::agent-view agent)))
+         (transcript (ourro.tui:view-transcript (ourro.agent::agent-view agent))))
+    ;; empty input + scrolled → End jumps to the bottom
+    (setf (ourro.tui:transcript-scroll transcript) 8)
+    (ourro.agent::handle-editor-key agent input :end)
+    (is (= 0 (ourro.tui:transcript-scroll transcript)))
+    ;; non-empty input → End moves to line end, leaves the scroll alone
+    (setf (ourro.tui:transcript-scroll transcript) 8)
+    (ourro.tui:input-insert input "abc")
+    (ourro.agent::handle-editor-key agent input :end)
+    (is (= 8 (ourro.tui:transcript-scroll transcript)))))
