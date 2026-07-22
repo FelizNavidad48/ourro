@@ -1,0 +1,36 @@
+(defgene ui/git-branch
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-read :ui)
+     :provenance (:seed t))
+  (:doc "A status-bar widget showing the workspace's current git branch, e.g.
+\"⎇ main\". It reads .git/HEAD directly (no subprocess) every 5 seconds and
+parses the ref. This is the seed exemplar for UI genes: nearest-genes selects
+it for any UI request, so the genome is its own few-shot training set.")
+  (:code
+   (defun parse-git-head (text)
+     "Extract a branch name from .git/HEAD contents (or a short sha for a
+detached HEAD). Pure: NIL when TEXT is empty or blank."
+     (when (stringp text)
+       (let ((line (string-trim '(#\Space #\Newline #\Return #\Tab) text))
+             (ref "ref: refs/heads/"))
+         (cond ((zerop (length line)) nil)
+               ((string-prefix-p ref line) (subseq line (length ref)))
+               (t (subseq line 0 (min 7 (length line))))))))
+   (defun git-branch-name ()
+     "The workspace's current git branch, or NIL when not a git repo."
+     (parse-git-head
+      (ignore-errors (cap/read-file (workspace-path ".git/HEAD")))))
+   (define-status-widget git-branch (:interval 5)
+     (let ((branch (git-branch-name)))
+       (if branch (format nil "⎇ ~A" branch) ""))))
+  (:tests
+   (test git-branch/parse-head
+     ;; Pure parse against fixture .git/HEAD contents — no live git needed.
+     (is (string= "main" (parse-git-head (format nil "ref: refs/heads/main~%"))))
+     (is (string= "feature/x"
+                  (parse-git-head "ref: refs/heads/feature/x")))
+     ;; Detached HEAD → short sha.
+     (is (string= "abc1234"
+                  (parse-git-head (format nil "abc1234def8901~%"))))
+     (is-false (parse-git-head ""))
+     (is-false (parse-git-head "   ")))))
