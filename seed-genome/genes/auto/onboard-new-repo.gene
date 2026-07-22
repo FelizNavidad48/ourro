@@ -1,0 +1,38 @@
+(defgene auto/onboard-new-repo
+    (:generation 1 :parent nil
+     :capabilities (:observe :filesystem-read :automate)
+     :provenance (:seed t))
+  (:doc "A reflex (M14-4): the first time ourro boots in a repository it has
+never seen, detect its build/test toolchain (Makefile, package.json, Cargo.toml,
+…) with pure file reads and nudge the user to /onboard — which grows verified
+repo/test + repo/build genes. Pure detection is automatic; running foreign build
+commands still takes the one blessing (/onboard). :observe remembers the repo,
+:filesystem-read probes for markers, :automate subscribes to session-start.")
+  (:code
+   (defun onboard-markers-present ()
+     "Names of build/test marker files present in the workspace root. Pure —
+file reads only."
+     (let ((markers (list "Makefile" "package.json" "Cargo.toml"
+                          "pyproject.toml" "go.mod" "Gemfile" "mix.exs")))
+       (remove-if-not (lambda (m) (pget (file-info m) :exists)) markers)))
+   (define-automation onboard-new-repo
+       (:on (:kind :session-start) :cooldown 1)
+     (let ((key (princ-to-string *workspace*)))
+       (unless (workspace-known-p key)
+         (remember-workspace key)
+         (let ((markers (onboard-markers-present)))
+           (when markers
+             (post-note
+              (format nil "unknown repo — found ~{~A~^, ~}. /onboard to probe and grow build/test genes."
+                      markers)
+              :style :info))))))
+   ;; M18's documented legacy subset: a literal POST-NOTE action lowers to a
+   ;; deterministic one-step reflex. The richer automation above is retained
+   ;; explicitly as opaque legacy Lisp until it is rewritten declaratively.
+   (define-automation onboard-complete-receipt
+       (:on (:kind :onboard-complete) :cooldown 1)
+     (post-note "workspace onboarding complete" :style :info)))
+  (:tests
+   (test onboard-new-repo/markers-present-is-pure
+     ;; The sandbox workspace is empty, so no toolchain markers are found.
+     (is (null (onboard-markers-present))))))
