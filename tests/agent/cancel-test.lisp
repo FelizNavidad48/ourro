@@ -83,3 +83,95 @@
     ;; The flag is cleared by the turn cleanup.
     (is-false (ourro.agent::agent-cancel-requested agent))))
 
+(test cancel-flag-cleared-before-next-turn
+  (let* ((agent (make-cancel-agent))
+         (provider (make-instance 'stream-then-cancel-provider :agent agent)))
+    (setf (ourro.agent::agent-provider agent) provider
+          (ourro.agent::agent-conversation agent)
+          (list (ourro.llm:user-message "hi")))
+    (ourro.agent::process-turn agent)               ; cancelled; cleanup clears flag
+    (is-false (ourro.agent::agent-cancel-requested agent))
+    ;; A fresh scripted turn now completes normally.
+    (setf (ourro.agent::agent-provider agent)
+          (ourro.llm:make-scripted-provider (list "all done")))
+    (ourro.agent::process-turn agent)
+    (is (search "all done" (cancel-transcript-text agent)))))
+
+(defclass always-calls-tool-provider (ourro.llm:provider) ())
+
+(defmethod ourro.llm:complete ((p always-calls-tool-provider) system messages tools
+                              &key on-event)
+  (declare (ignore system messages tools on-event))
+  ;; A deliberately unregistered tool: execute-tool-call returns a clean error
+  ;; string (no subprocess, no crash), so the loop runs its full 25 iterations
+  ;; cheaply and stops only at the cap.
+  (ourro.llm:assistant-message
+   (list (list :type :tool-call :id "t" :name "no-such-tool-xyz"
+               :args-json "{}"))))
+
+(test turn-capped-notifies-instead-of-stopping-silently
+  ;; F-turncap: when the tool loop exhausts *max-tool-iterations* with the model
+  ;; still calling tools, the user must see WHY it stopped (not a silent end),
+  ;; and a distinct :turn-capped event must be logged.
+  (let ((agent (make-cancel-agent))
+        (events '()))
+    (setf (ourro.agent::agent-provider agent)
+          (make-instance 'always-calls-tool-provider)
+          (ourro.agent::agent-conversation agent)
+          (list (ourro.llm:user-message "do a lot")))
+    (let ((ourro.observe:*event-sink* (lambda (e) (push e events))))
+      (ourro.agent::process-turn agent))
+    ;; A visible cap notice naming the step count and the way to resume.
+    (let ((text (cancel-transcript-text agent)))
+      (is (search "stopped after" text))
+      (is (search "continue" text)))
+    ;; The distinct telemetry event fired exactly once.
+    (is (= 1 (count :turn-capped events :key (lambda (e) (getf e :kind)))))
+    ;; BUSY remains claimed until the UI actor consumes :turn-done; keyboard
+    ;; input in this gap must queue rather than race a new turn.
+    (is-true (ourro.agent::agent-busy agent))
+    (is-false (ourro.agent::agent-cancel-requested agent))))
+
+(test escalated-cancel-repairs-dangling-tool-calls
+  ;; Simulate an escalated interrupt landing INSIDE execute-tool-call: the
+  ;; assistant message with N functionCalls is already in the conversation but
+  ;; RUN-TOOL-CALLS never returned, so no results were appended. The cancel
+  ;; finalizer must synthesize a functionResponse for every call, or the next
+  ;; Gemini turn 400s on the dangling functionCalls (M7-1 review #1).
+  (let* ((agent (make-cancel-agent))
+         (assistant (ourro.llm:assistant-message
+                     (list (list :type :tool-call :id "a" :name "shell")
+                           (list :type :tool-call :id "b" :name "read_file")))))
+    (setf (ourro.agent::agent-conversation agent)
+          (list (ourro.llm:user-message "do it") assistant))
+    (ourro.agent::finalize-cancelled-turn agent)
+    (let ((results (remove-if-not (lambda (m) (eq (getf m :role) :tool))
+                                  (ourro.agent::agent-conversation agent))))
+      (is (= 2 (length results)))
+      (is (equal '("a" "b") (mapcar (lambda (m) (getf m :tool-call-id)) results)))
+      (is (every (lambda (m) (getf m :error-p)) results)))))
+
+(test repair-noop-when-tool-calls-already-answered
+  ;; The cooperative path already appends results, so the last message is a
+  ;; tool result — repair must not double-answer.
+  (let* ((agent (make-cancel-agent))
+         (assistant (ourro.llm:assistant-message
+                     (list (list :type :tool-call :id "a" :name "shell"))))
+         (result (ourro.llm:tool-result-message "a" "shell" "done")))
+    (setf (ourro.agent::agent-conversation agent) (list assistant result))
+    (ourro.agent::repair-dangling-tool-calls agent)
+    (is (= 2 (length (ourro.agent::agent-conversation agent))))))
+
+(test escape-while-busy-cancels-only-with-empty-input
+  (let* ((agent (make-cancel-agent))
+         (input (ourro.tui:view-input (ourro.agent::agent-view agent))))
+    (setf (ourro.agent::agent-busy agent) t)
+    ;; busy + empty input → cancel
+    (ourro.agent::handle-editor-key agent input :escape)
+    (is-true (ourro.agent::agent-cancel-requested agent))
+    ;; busy + non-empty input → clears the input, does not cancel
+    (ourro.agent::clear-cancel agent)
+    (ourro.tui:input-insert input "hello")
+    (ourro.agent::handle-editor-key agent input :escape)
+    (is-false (ourro.agent::agent-cancel-requested agent))
+    (is (string= "" (ourro.tui:input-text input)))))
