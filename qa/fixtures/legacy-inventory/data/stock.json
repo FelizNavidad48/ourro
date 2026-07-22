@@ -1,0 +1,22 @@
+{
+  "WOOD-01": {
+    "name": "Plywood sheet",
+    "price": 18.5,
+    "qty": 12
+  },
+  "GLUE-02": {
+    "name": "Wood glue 500ml",
+    "price": 6.2,
+    "qty": 3
+  },
+  "SAND-03": {
+    "name": "Sandpaper pack",
+    "price": 4.75,
+    "qty": 40
+  },
+  "CLMP-04": {
+    "name": "Bar clamp 60cm",
+    "price": 11.0,
+    "qty": 6
+  }
+}
