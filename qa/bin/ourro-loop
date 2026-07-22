@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ourro-loop — the cloud QA loop conductor (qa/docs/plan-cloud-qa.md).
+#
+# A deterministic, no-LLM state machine sequencing ourro instances:
+# subject ← operator (mission mode), findings harvested per cycle, spend
+# ledgered daily. Usage:
+#
+#   qa/bin/ourro-loop run          # the nonstop loop
+#   qa/bin/ourro-loop once         # exactly one cycle (smoke/verification)
+#   qa/bin/ourro-loop status       # current loop-state + today's spend
+#
+# Env: OURRO_LOOP_ROOT (state, default /tmp/ourro-loop), OURRO_LOOP_MODEL,
+# OURRO_LOOP_DAILY_USD, OURRO_LOOP_REPO. Kill switch: touch $OURRO_LOOP_ROOT/STOP.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+SBCL="${SBCL:-sbcl}"
+SUB="${1:-run}"
+exec env -u TMUX "$SBCL" --script <<EOF
+(require :sb-posix)
+(handler-bind ((warning #'muffle-warning))
+  (load "$ROOT/qa/src/operator.lisp"))
+(load "$ROOT/qa/loop/compose.lisp")
+(load "$ROOT/qa/loop/spend.lisp")
+(load "$ROOT/qa/loop/github.lisp")
+(load "$ROOT/qa/loop/conductor.lisp")
+(case (intern (string-upcase "$SUB") :keyword)
+  (:run (ourro.qa.conductor:run))
+  (:once (ourro.qa.conductor:run :once t))
+  (:status
+   (format t "~S~%" (list :state (ourro.qa.conductor:read-state)
+                          :today-usd (ourro.qa.spend:ledger-total
+                                      (merge-pathnames "ledger/"
+                                                       (ourro.qa.conductor:loop-root))))))
+  (t (format t "usage: ourro-loop run|once|status~%") (sb-ext:exit :code 1)))
+EOF
