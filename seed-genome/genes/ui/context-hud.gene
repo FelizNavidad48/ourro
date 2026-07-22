@@ -1,0 +1,35 @@
+(defgene ui/context-hud
+    (:generation 1 :parent nil
+     :capabilities (:observe :ui)
+     :provenance (:seed t))
+  (:doc "A right-aligned status-bar cell showing how full the context window is
+and — when the model's pricing is known — the running session cost: \"ctx 34% ·
+$0.42\", or just \"ctx 34%\" when pricing is unknown, or nothing before any model
+call. Reads context-summary every 5s. Like the other HUDs, the chrome is itself a
+gene. :observe reads the numbers; :ui registers the widget.")
+  (:code
+   (defun context-hud-line (summary)
+     "Render the context/cost cell from a context-summary plist. Pure: empty
+string until there is a measured context fraction."
+     (if (null summary)
+         ""
+         (let ((percent (pget summary :percent 0))
+               (cost (pget summary :cost 0))
+               (known (pget summary :cost-known)))
+           (if (and known (plusp cost))
+               (format nil "ctx ~D% · $~,2F" percent cost)
+               (format nil "ctx ~D%" percent)))))
+   (define-status-widget context-hud (:interval 5)
+     (context-hud-line (context-summary))))
+  (:tests
+   (test context-hud/line
+     ;; No summary (unwired / bare boot) → an empty cell, never an error.
+     (is (string= "" (context-hud-line nil)))
+     ;; Fraction known, pricing unknown → just the percentage.
+     (is (string= "ctx 34%"
+                  (context-hud-line (list :percent 34 :fraction 0.34
+                                          :cost 0 :cost-known nil))))
+     ;; Fraction + cost known → percentage and dollars.
+     (is (string= "ctx 50% · $0.42"
+                  (context-hud-line (list :percent 50 :fraction 0.5
+                                          :cost 0.42 :cost-known t)))))))
