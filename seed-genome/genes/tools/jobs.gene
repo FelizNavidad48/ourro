@@ -1,0 +1,95 @@
+(defgene tool/jobs
+    (:generation 1 :parent nil
+     :capabilities (:subprocess :observe)
+     :provenance (:seed t))
+  (:doc "Background jobs: run a long-lived command (a dev server, a file
+watcher, a slow build) without blocking chat, then check on it or stop it. A
+job's stdout and stderr stream to a log file, and — because the agent is not the
+jobs' session leader — a job SURVIVES the agent's own evolution restart: the
+same server keeps running across a generation switch. Use job_start for anything
+that does not return promptly; use the plain `shell` tool for quick commands.
+:subprocess launches/kills; :observe reads status.")
+  (:code
+   (defun jobs-overview ()
+     "One line per job for the no-id job_status call. Pure over jobs-summary."
+     (let ((jobs (pget (jobs-summary) :jobs)))
+       (if (null jobs)
+           "no background jobs."
+           (string-join
+            (format nil "~%")
+            (mapcar (lambda (j)
+                      (format nil "~A  ~A  ~A~@[ [exit ~A]~]"
+                              (pget j :id)
+                              (string-downcase (symbol-name (pget j :status)))
+                              (pget j :command)
+                              (and (not (eq (pget j :status) :running))
+                                   (pget j :exit))))
+                    jobs)))))
+   (deftool job_start
+       ((command :string "Shell command to run in the background" :required t)
+        (directory :string "Working directory relative to the workspace" :default ""))
+     (:doc "Start COMMAND as a background job and return its id plus ~2s of early
+output, so a server that crashes on boot is visible in the same result.")
+     (:contract (:pre ((stringp command)) :post ((stringp result))))
+     (let* ((dir (if (string= directory "") nil (workspace-path directory)))
+            (id (start-job command :directory dir))
+            (early ""))
+       ;; Poll the log for up to ~2s; job_status returns only the NEW bytes each
+       ;; call, so concatenating yields the full early output AND advances the
+       ;; cursor past it (the model won't see it twice on a later job_status).
+       (dotimes (i 20)
+         (sleep 0.1)
+         (let ((st (job-status id)))
+           (setf early (concatenate (quote string) early (or (pget st :tail) "")))
+           (unless (pget st :running-p) (return))))
+       (let ((e (trim early)))
+         (clamp-output
+          (format nil "started job ~A (~A)~@[~%~A~]"
+                  id command (if (plusp (length e)) e nil))
+          :label "job start"))))
+   (deftool job_status
+       ((id :string "Job id (e.g. j1); leave empty to list all jobs" :default ""))
+     (:doc "Show a job's status and the log tail since you last looked, or list
+all jobs when no id is given.")
+     (:contract (:pre ((stringp id)) :post ((stringp result))))
+     (if (string= id "")
+         (jobs-overview)
+         (let ((st (job-status id)))
+           (if (null st)
+               (format nil "no such job: ~A" id)
+               (let ((tail (trim (or (pget st :tail) ""))))
+                 (clamp-output
+                  (format nil "job ~A (~A) — ~A~@[ [exit ~A]~]~@[~%~A~]"
+                          (pget st :id) (pget st :command)
+                          (string-downcase (symbol-name (pget st :status)))
+                          (and (not (pget st :running-p)) (pget st :exit))
+                          (if (plusp (length tail)) tail nil))
+                  :label "job status"))))))
+   (deftool job_kill
+       ((id :string "Job id to stop (e.g. j1)" :required t))
+     (:doc "Stop a running job (TERM, then KILL after a short grace).")
+     (:contract (:pre ((stringp id)) :post ((stringp result))))
+     (case (job-kill id)
+       (:killed (format nil "killed job ~A" id))
+       (:already-exited (format nil "job ~A already exited" id))
+       (t (format nil "no such job: ~A" id)))))
+  (:tests
+   (test jobs/overview-empty-or-string
+     ;; jobs-overview is pure over jobs-summary and must always return a string.
+     (is (stringp (jobs-overview))))
+   (test jobs/start-returns-id-and-status-reads
+     (let ((h (make-hash-table :test (quote equal))))
+       (setf (gethash "command" h) "echo ourro-job-ok")
+       (let ((out (run-tool (find-tool "job_start") h)))
+         (is (stringp out))
+         (is (search "started job" out))
+         ;; The echo's output surfaces in the same result (early-output poll).
+         (is (search "ourro-job-ok" out))))
+     ;; Listing all jobs is a string, never an error.
+     (let ((h (make-hash-table :test (quote equal))))
+       (setf (gethash "id" h) "")
+       (is (stringp (run-tool (find-tool "job_status") h)))))
+   (test jobs/kill-unknown-is-clean
+     (let ((h (make-hash-table :test (quote equal))))
+       (setf (gethash "id" h) "j-nope")
+       (is (search "no such job" (run-tool (find-tool "job_kill") h)))))))
