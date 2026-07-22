@@ -1,0 +1,25 @@
+(defgene tool/list-files
+    (:generation 1 :parent nil
+     :capabilities (:filesystem-read)
+     :provenance (:seed t))
+  (:doc "List files in the workspace, optionally filtered by a glob pattern
+(* and ? wildcards). Skips version-control and dependency directories.")
+  (:code
+   (deftool list-files
+       ((pattern :string "Optional glob to filter names (e.g. *.lisp)" :default nil)
+        (limit :integer "Maximum number of files to return" :default 300))
+     (:doc "List workspace files, optionally filtered by a glob pattern.")
+     (:contract (:pre () :post ((stringp result))))
+     (let ((files (list-files :pattern pattern :limit limit)))
+       (if files
+           (clamp-output (string-join (string #\Newline) files) :label "listing")
+           "No matching files."))))
+  (:tests
+   (test list-files/finds-created
+     (let ((path (workspace-path "ourro-list-test.lisp")))
+       (cap/write-file path "; test")
+       (let ((h (make-hash-table :test (quote equal))))
+         (setf (gethash "pattern" h) "ourro-list-test*")
+         (let ((out (run-tool (find-tool "list_files") h)))
+           (is (search "ourro-list-test" out))))
+       (cap/delete-file path)))))
