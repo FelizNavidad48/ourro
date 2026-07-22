@@ -1,0 +1,24 @@
+(defgene ui/jobs-hud
+    (:generation 1 :parent nil
+     :capabilities (:observe :ui)
+     :provenance (:seed t))
+  (:doc "A right-aligned status-bar cell showing how many background jobs are
+running: \"⚙ 2 jobs\", or nothing when none run. Reads jobs-summary every 5s.
+Like the evolution HUD, the chrome is itself a gene — ask to restyle it and
+watch it evolve live. :observe reads the job registry; :ui registers the widget.")
+  (:code
+   (defun jobs-hud-line (summary)
+     "Render the jobs cell from a jobs-summary plist. Pure: empty string when no
+job is running, else the running count."
+     (let ((running (pget summary :running 0)))
+       (if (plusp running)
+           (format nil "⚙ ~D job~:[~;s~]" running (> running 1))
+           "")))
+   (define-status-widget jobs-hud (:interval 5)
+     (jobs-hud-line (jobs-summary))))
+  (:tests
+   (test jobs-hud/line
+     (is (string= "" (jobs-hud-line (list :running 0 :total 0 :jobs nil))))
+     (is (string= "⚙ 1 job" (jobs-hud-line (list :running 1 :total 1 :jobs nil))))
+     (is (string= "⚙ 2 jobs"
+                  (jobs-hud-line (list :running 2 :total 3 :jobs nil)))))))
