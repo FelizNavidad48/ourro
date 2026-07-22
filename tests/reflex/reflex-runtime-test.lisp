@@ -309,3 +309,237 @@
                        instance)
                       :reason)))))))
 
+(test simulation-is-virtual-and-version-pinned
+  (with-scratch-reflex-runtime ()
+    (let ((v1 (install-active-fixture-version :version-number 1))
+          (live-calls 0))
+      (setf (gethash :notify ourro.reflex.effects:*effect-hooks*)
+            (lambda (input key)
+              (declare (ignore input key)) (incf live-calls)))
+      (ourro.reflex.runtime:submit-command
+       (list :type :arm :workspace "/repo/a/"))
+      (let* ((instances (ourro.reflex.runtime:simulate-event
+                         (fixture-runtime-event)))
+             (instance (first instances)))
+        (is (= 0 live-calls))
+        (is (string= (ourro.reflex.model:version-hash v1)
+                     (ourro.reflex.runtime:runtime-instance-version-hash instance)))
+        (is (eq :succeeded
+                (ourro.reflex.runtime:runtime-instance-status instance)))))))
+
+(test runtime-freeze-timer-pause-and-cancel-are-durable-commands
+  (with-scratch-reflex-runtime ()
+    (install-active-fixture-version)
+    (ourro.reflex.runtime:submit-command (list :type :arm :workspace "/repo/a/"))
+    (ourro.reflex.runtime:submit-command (list :type :freeze :workspace "/repo/a/"))
+    (is (null (ourro.reflex.runtime:submit-command
+               (list :type :external-event :event (fixture-runtime-event)))))
+    (let ((timer (ourro.reflex.runtime:submit-command
+                  (list :type :schedule :workspace "/repo/a/"
+                        :due-unix (+ (unix-time) 60)
+                        :event (fixture-runtime-event)))))
+      (is (= 1 (pget (ourro.reflex.runtime:runtime-status) :timers)))
+      (is-true (ourro.reflex.runtime:submit-command
+                (list :type :cancel-timer :timer-id timer)))
+      (is (= 0 (pget (ourro.reflex.runtime:runtime-status) :timers))))
+    (ourro.reflex.runtime:submit-command
+     (list :type :unfreeze :workspace "/repo/a/"))
+    (let ((instance (first (ourro.reflex.runtime:submit-command
+                            (list :type :external-event
+                                  :event (fixture-runtime-event))))))
+      (ourro.reflex.runtime:submit-command
+       (list :type :pause :instance-id
+             (ourro.reflex.runtime:runtime-instance-id instance)))
+      (is (eq :paused (ourro.reflex.runtime:runtime-instance-status instance)))
+      (ourro.reflex.runtime:submit-command
+       (list :type :cancel :instance-id
+             (ourro.reflex.runtime:runtime-instance-id instance)))
+      (is (eq :cancelled
+              (ourro.reflex.runtime:runtime-instance-status instance))))))
+
+(test foreground-preemption-defers-background-effect-start
+  (with-scratch-reflex-runtime ()
+    (install-active-fixture-version)
+    (let ((calls 0))
+      (setf (gethash :notify ourro.reflex.effects:*effect-hooks*)
+            (lambda (input key)
+              (declare (ignore input key)) (incf calls) '(:ok t)))
+      (ourro.reflex.runtime:start-runtime-worker)
+      (ourro.reflex.runtime:submit-command
+       (list :type :arm :workspace "/repo/a/"))
+      (ourro.reflex.runtime:submit-command
+       (list :type :foreground-start :workspace "/repo/a/"))
+      (ourro.reflex.runtime:submit-command
+       (list :type :external-event :event (fixture-runtime-event)))
+      (sleep 0.15)
+      (is (= 0 calls))
+      (ourro.reflex.runtime:submit-command
+       (list :type :foreground-end :workspace "/repo/a/"))
+      (is-true (wait-until (lambda () (= calls 1)) 2)))))
+
+(test stalled-effect-does-not-block-status-disarm-or-bounded-shutdown
+  (with-scratch-reflex-runtime ()
+    (install-active-fixture-version)
+    (let ((started (bt:make-semaphore :name "stalled-effect")))
+      (setf (gethash :notify ourro.reflex.effects:*effect-hooks*)
+            (lambda (input key)
+              (declare (ignore input key))
+              (bt:signal-semaphore started)
+              (sleep 5)
+              '(:late t)))
+      (ourro.reflex.runtime:start-runtime-worker)
+      (ourro.reflex.runtime:submit-command
+       (list :type :arm :workspace "/repo/a/"))
+      (ourro.reflex.runtime:submit-command
+       (list :type :external-event :event (fixture-runtime-event)))
+      (is-true (bt:wait-on-semaphore started :timeout 1))
+      (let ((start (get-internal-real-time)))
+        (is-true (pget (ourro.reflex.runtime:submit-command '(:type :status))
+                       :armed))
+        (ourro.reflex.runtime:submit-command
+         (list :type :disarm :workspace "/repo/a/"))
+        (is (< (/ (- (get-internal-real-time) start)
+                  internal-time-units-per-second)
+               0.25)))
+      (let ((start (get-internal-real-time)))
+        (ourro.reflex.runtime:stop-runtime-worker)
+        (is (< (/ (- (get-internal-real-time) start)
+                  internal-time-units-per-second)
+               2.0))))))
+
+(test canary-routing-keeps-prior-version-as-the-control
+  (with-scratch-reflex-runtime ()
+    (let* ((v1 (install-active-fixture-version :version-number 1))
+           (form (fixture-reflex-form :version 2))
+           (policy (find :policy (cddr form) :key #'first))
+           (v2 nil))
+      (setf (second policy)
+            '(:approval :required :canary-percent 0 :canary-max-firings 20))
+      (setf v2 (ourro.reflex.compiler:compile-reflex
+                (ourro.reflex.model:definition-from-form form)))
+      (ourro.reflex.compiler:install-reflex-version v2)
+      (ourro.reflex.compiler:stage-reflex-version
+       'failed-job-briefing (ourro.reflex.model:version-hash v2)
+       :approved-authority '(:observe))
+      (ourro.reflex.compiler:canary-reflex-version
+       'failed-job-briefing (ourro.reflex.model:version-hash v2)
+       :approved-authority '(:observe))
+      (ourro.reflex.runtime:submit-command
+       (list :type :arm :workspace "/repo/a/"))
+      (let ((instance (first (ourro.reflex.runtime:submit-command
+                              (list :type :external-event
+                                    :event (fixture-runtime-event))))))
+        (is (string= (ourro.reflex.model:version-hash v1)
+                     (ourro.reflex.runtime:runtime-instance-version-hash
+                      instance)))))))
+
+(test canary-budget-is-charged-only-by-matching-firings
+  (with-scratch-reflex-runtime ()
+    (let* ((v1 (install-active-fixture-version :version-number 1))
+           (form (fixture-reflex-form :version 2))
+           (policy (find :policy (cddr form) :key #'first)))
+      (declare (ignore v1))
+      (setf (second policy)
+            '(:approval :required :canary-percent 100 :canary-max-firings 2))
+      (let ((v2 (ourro.reflex.compiler:compile-reflex
+                 (ourro.reflex.model:definition-from-form form))))
+        (ourro.reflex.compiler:install-reflex-version v2)
+        (ourro.reflex.compiler:stage-reflex-version
+         'failed-job-briefing (ourro.reflex.model:version-hash v2)
+         :approved-authority '(:observe))
+        (ourro.reflex.compiler:canary-reflex-version
+         'failed-job-briefing (ourro.reflex.model:version-hash v2)
+         :approved-authority '(:observe))
+        (ourro.reflex.runtime:submit-command
+         (list :type :arm :workspace "/repo/a/"))
+        (dotimes (i 25)
+          (ourro.reflex.runtime:submit-command
+           (list :type :external-event
+                 :event (ourro.reflex.journal:append-record
+                         (list :kind :note :ordinal i) :workspace "/repo/a/"))))
+        (is (= 0 (pget (ourro.reflex.compiler:canary-route
+                        'failed-job-briefing) :firings)))
+        (dotimes (i 2)
+          (ourro.reflex.runtime:submit-command
+           (list :type :external-event :event (fixture-runtime-event))))
+        (is (= 2 (pget (ourro.reflex.compiler:canary-route
+                        'failed-job-briefing) :firings)))))))
+
+(test runtime-workers-do-not-snapshot-replaceable-journal-collections
+  (let ((bindings (let ((ourro.reflex.journal::*journal-path-override* nil))
+                    (ourro.reflex.runtime::runtime-thread-bindings))))
+    (dolist (symbol '(ourro.reflex.journal::*journal-records*
+                      ourro.reflex.journal::*journal-by-id*
+                      ourro.reflex.journal::*journal-by-workspace*
+                      ourro.reflex.journal::*journal-health*))
+      (is-false (assoc symbol bindings)))))
+
+(test rollback-migrates-state-reversibly-and-cold-recovers-target-version
+  (with-scratch-reflex-runtime ()
+    (let ((ourro.reflex.model::*state-migrations*
+            (make-hash-table :test #'equal)))
+      (flet ((stateful-form (version schema initial)
+               `(define-reflex stateful-rollback
+                  (:identity (:version ,version :workspace :current
+                              :capabilities (:observe)))
+                  (:trigger (:kind :stateful-probe))
+                  (:guards ())
+                  (:state (:version ,schema :initial-step :notify
+                           :initial ,initial))
+                  (:workflow ((:id :notify :activity :notify :next :done)))
+                  (:policy (:approval :required)))))
+        (ourro.reflex.model:register-state-migration
+         'stateful-rollback 1 2
+         (lambda (state) (setf (getf state :schema-two) :present) state)
+         (lambda (state) (remf state :schema-two) state))
+        (let* ((v1 (ourro.reflex.compiler:compile-reflex
+                    (ourro.reflex.model:definition-from-form
+                     (stateful-form 1 1 '(:step :notify :count 7)))))
+               (v2 (ourro.reflex.compiler:compile-reflex
+                    (ourro.reflex.model:definition-from-form
+                     (stateful-form 2 2
+                                    '(:step :notify :count 7
+                                      :schema-two :present))))))
+          (ourro.reflex.compiler:install-reflex-version v1)
+          (ourro.reflex.compiler:install-reflex-version v2)
+          (ourro.reflex.compiler:activate-reflex-version
+           'stateful-rollback (ourro.reflex.model:version-hash v2)
+           :approved-authority '(:observe))
+          (ourro.reflex.runtime:submit-command
+           (list :type :arm :workspace "/repo/a/"))
+          (let* ((event (ourro.reflex.journal:append-record
+                         (list :kind :stateful-probe) :workspace "/repo/a/"))
+                 (instance
+                   (first (ourro.reflex.runtime:submit-command
+                           (list :type :external-event :event event))))
+                 (id (ourro.reflex.runtime:runtime-instance-id instance)))
+            (is (= 7 (pget (ourro.reflex.runtime:runtime-instance-state instance)
+                           :count)))
+            (ourro.reflex.compiler:rollback-reflex-version
+             'stateful-rollback (ourro.reflex.model:version-hash v1))
+            (is (eq :paused
+                    (ourro.reflex.runtime:runtime-instance-status instance)))
+            (is (= 7 (pget (ourro.reflex.runtime:runtime-instance-state instance)
+                           :count)))
+            (is-false (pget (ourro.reflex.runtime:runtime-instance-state instance)
+                            :schema-two))
+            (is (string= (ourro.reflex.model:version-hash v1)
+                         (ourro.reflex.runtime:runtime-instance-version-hash
+                          instance)))
+            ;; Simulate a cold image's reconstructed closure and journal state.
+            (let ((recompiled-v1
+                    (ourro.reflex.compiler:compile-reflex
+                     (ourro.reflex.model:version-definition v1))))
+              (is (string= (ourro.reflex.model:version-hash v1)
+                           (ourro.reflex.model:version-hash recompiled-v1))))
+            (ourro.reflex.runtime:reset-runtime)
+            (ourro.reflex.runtime:recover-runtime "/repo/a/")
+            (let ((recovered (ourro.reflex.runtime:find-runtime-instance id)))
+              (is-true recovered)
+              (is (eq :paused
+                      (ourro.reflex.runtime:runtime-instance-status recovered)))
+              (is (= 7 (pget (ourro.reflex.runtime:runtime-instance-state recovered)
+                             :count)))
+              (is (string= (ourro.reflex.model:version-hash v1)
+                           (ourro.reflex.runtime:runtime-instance-version-hash
+                            recovered))))))))))
