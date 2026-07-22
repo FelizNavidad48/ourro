@@ -148,3 +148,109 @@
     (is (string= "do this next" (ourro.agent::dequeue-submission agent)))
     (is (null (ourro.agent::agent-pending-submissions agent)))))
 
+(test input-during-in-flight-slash-command-queues
+  ;; M4-2 review #2: a slow slash command (/onboard) now claims BUSY, so a
+  ;; submission entered while it runs queues instead of racing a concurrent
+  ;; turn. With BUSY set (the in-flight state), any submission — slash or not —
+  ;; goes to the queue.
+  (let ((agent (make-test-agent)))
+    (setf (ourro.agent::agent-busy agent) t)
+    (ourro.agent::run-submission agent "/genome")
+    (ourro.agent::run-submission agent "then this")
+    (is (equal '("/genome" "then this")
+               (ourro.agent::agent-pending-submissions agent)))))
+
+
+(test checkpoint-worthy-command-predicate
+  (is-true (ourro.agent::checkpoint-worthy-command-p "/keep somegene"))
+  (is-true (ourro.agent::checkpoint-worthy-command-p "/revert"))
+  (is-true (ourro.agent::checkpoint-worthy-command-p "/FREEZE")) ; case-insensitive
+  (is-true (ourro.agent::checkpoint-worthy-command-p "/onboard"))
+  (is-false (ourro.agent::checkpoint-worthy-command-p "/help"))
+  (is-false (ourro.agent::checkpoint-worthy-command-p "/log"))
+  (is-false (ourro.agent::checkpoint-worthy-command-p "/genome"))
+  (is-false (ourro.agent::checkpoint-worthy-command-p "/tools"))
+  (is-false (ourro.agent::checkpoint-worthy-command-p "/evolutions")))
+
+(test pending-submissions-survive-handoff-roundtrip
+  (let ((agent (make-test-agent)))
+    (setf (ourro.agent::agent-pending-submissions agent) (list "a" "b"))
+    (let* ((payload (ourro.agent::session-payload agent))
+           (path (ourro.kernel:write-handoff payload
+                                            :directory (uiop:temporary-directory)))
+           (back (ourro.kernel:read-handoff path))
+           (agent2 (make-test-agent)))
+      (is (equal '("a" "b") (getf back :pending)))
+      (ourro.agent::restore-session agent2 back)
+      (is (equal '("a" "b") (ourro.agent::agent-pending-submissions agent2)))
+      (ignore-errors (delete-file path)))))
+
+
+(test kernel-selftest-passes
+  ;; The in-image suite that runs at every --smoke boot must be green here too.
+  (multiple-value-bind (passed report) (ourro.kernel:run-kernel-selftest)
+    (declare (ignorable report))
+    (is-true passed)))
+
+(test kernel-locked-p-is-a-boolean-and-unlocked-in-tests
+  ;; kernel-locked-p reports whether OURRO.KERNEL is package-locked (M8). The
+  ;; test image is deliberately unlocked (only built images lock it), so it must
+  ;; report NIL here — and never error, regardless.
+  (is (typep (ourro.kernel:kernel-locked-p) 'boolean))
+  (is-false (ourro.kernel:kernel-locked-p)))
+
+
+(test capability-ceiling-blocks-writes-permits-reads
+  ;; With the visiting ceiling, a blanket +all-capabilities+ grant collapses to
+  ;; read+llm: a write signals a clean CAPABILITY-VIOLATION before touching disk.
+  (let ((ourro.kernel:*capability-ceiling* '(:filesystem-read :llm)))
+    (ourro.kernel:with-capabilities ourro.kernel:+all-capabilities+
+      (is-true (member :filesystem-read ourro.kernel:*active-capabilities*))
+      (is-true (member :llm ourro.kernel:*active-capabilities*))
+      (is-false (member :filesystem-write ourro.kernel:*active-capabilities*))
+      (is-false (member :subprocess ourro.kernel:*active-capabilities*))
+      (signals ourro.kernel:capability-violation
+        (ourro.kernel:cap/write-file
+         (merge-pathnames "nope.txt" (uiop:temporary-directory)) "x")))))
+
+(test capability-ceiling-default-is-transparent
+  ;; The default ceiling is the full set, so a normal grant is unchanged.
+  (ourro.kernel:with-capabilities '(:filesystem-write :subprocess)
+    (is-true (member :filesystem-write ourro.kernel:*active-capabilities*))
+    (is-true (member :subprocess ourro.kernel:*active-capabilities*))))
+
+(test nested-capability-grants-only-attenuate
+  ;; A no-capability evolved caller cannot regain write authority by nesting a
+  ;; broader evolved grant (the same invariant protects nested tool calls).
+  (ourro.kernel:with-capabilities '()
+    (signals ourro.kernel:capability-violation
+      (ourro.kernel:with-attenuated-capabilities ourro.kernel:+all-capabilities+
+        (ourro.kernel:require-capability :filesystem-write :probe)))))
+
+(test explicitly-empty-gene-capabilities-stay-empty
+  (let ((ourro.tools:*current-gene-context*
+          '(:name "test/no-cap" :capabilities ())))
+    (eval '(ourro.tools:deftool no-cap-probe ()
+             (:doc "No authority.")
+             (:contract (:pre () :post ((stringp result))))
+             "ok"))
+    (unwind-protect
+         (is (null (ourro.tools:tool-capabilities
+                    (ourro.tools:find-tool "no_cap_probe"))))
+      (ourro.tools:unregister-tool "no_cap_probe"))))
+
+
+(test run-program-returns-when-grandchild-holds-pipe
+  ;; A backgrounded child inherits the output pipe and outlives the shell:
+  ;; `sleep 15 &` keeps the write end open long after sh exits. Reading must
+  ;; stop on child death plus a short quiet grace — not wait for pipe EOF,
+  ;; which formerly wedged the shell tool for the grandchild's whole lifetime.
+  (ourro.kernel:with-capabilities '(:subprocess)
+    (let ((start (get-universal-time)))
+      (multiple-value-bind (out code)
+          (ourro.kernel:cap/run-program
+           (list "/bin/sh" "-c" "sleep 15 & echo started")
+           :timeout 60)
+        (is (eql 0 code))
+        (is (search "started" out))
+        (is (< (- (get-universal-time) start) 10))))))
