@@ -23,3 +23,18 @@
       (is (search "cancels" text))
       (is (search "quits" text)))))
 
+(test cold-boot-shows-primer
+  (let ((agent (help-agent)))
+    (ourro.agent::greet agent)
+    (let ((text (help-transcript-text agent)))
+      (is (search "how this works" text))
+      (is (search "/onboard" text)))))
+
+(test restored-session-skips-primer
+  (let ((agent (help-agent)))
+    ;; A restored session has scrollback before greet runs — the transcript is
+    ;; non-empty, so the primer is skipped.
+    (ourro.agent::add-transcript-line
+     agent (list (ourro.tui:styled :assistant "a restored prior line")))
+    (ourro.agent::greet agent)
+    (is (null (search "how this works" (help-transcript-text agent))))))
