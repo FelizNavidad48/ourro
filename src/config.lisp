@@ -15,7 +15,7 @@
         :max-stream-seconds 600      ; wall-clock budget for one streamed turn
         :max-tool-steps 25           ; model→tool iterations before a continue prompt
         :restart-policy :calm        ; :calm | :eager | :manual (generation handoff)
-        :theme :light                ; :light | :dark
+        :theme :dark                 ; :light | :dark
         :experimental-reflexes nil   ; background reflex firing opt-in
         :default-model "opus-4-6"    ; used when no OURRO_MODEL is set
         :bedrock-region "eu-north-1") ; always eu-north-1 unless deliberately changed

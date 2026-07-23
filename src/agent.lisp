@@ -145,8 +145,8 @@ handoff serialization can read it from a worker.")))
 
 (defun make-agent (&key provider (generation "gen-0001") supervisor
                         (mode :auto) visiting session-id)
-  (or (ourro.tui:set-theme (ourro.config:setting :theme :light))
-      (ourro.tui:set-theme :light))
+  (or (ourro.tui:set-theme (ourro.config:setting :theme :dark))
+      (ourro.tui:set-theme :dark))
   (let ((view (ourro.tui:make-view
                :repo (display-repo)
                :generation generation)))
