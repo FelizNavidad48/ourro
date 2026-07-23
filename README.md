@@ -84,6 +84,7 @@ for:
 | `/disarm` · `/arm` | stop / resume reflexes firing |
 | `/revert` | undo the most recent evolution |
 | `/onboard` | probe this repo's build/test/lint commands |
+| `/theme light` · `/theme dark` | switch the warm-paper / dark TUI palette |
 | `/quit` | exit |
 
 Learned tools and reflexes arrive as ticker prompts (`[y install]`); press

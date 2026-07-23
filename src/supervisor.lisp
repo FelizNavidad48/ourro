@@ -85,6 +85,7 @@ policy is unit-tested directly:
     :max-stream-seconds 600
     :max-tool-steps 25
     :restart-policy :calm
+    :theme :light
     :experimental-reflexes nil
     :default-model "opus-4-6"
     :bedrock-region "eu-north-1"
