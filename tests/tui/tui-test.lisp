@@ -33,6 +33,28 @@
           (list (list (ourro.tui:styled :assistant "hello"))))
     (finishes (ourro.tui:paint-frame screen view))))
 
+(test themes-are-truecolor-and-switchable
+  (unwind-protect
+       (progn
+         (is (equal '(:light :dark) (ourro.tui:theme-names)))
+         (is (eq :dark (ourro.tui:set-theme "dark")))
+         (is (eq :dark (ourro.tui:current-theme)))
+         (is (search "38;2;244;234;213"
+                     (ourro.tui::sgr :default)))
+         (is (null (ourro.tui:set-theme "sepia"))))
+    (ourro.tui:set-theme :light)))
+
+(test code-row-keeps-inverted-background-through-padding
+  (unwind-protect
+       (progn
+         (ourro.tui:set-theme :light)
+         (let ((rendered
+                 (ourro.tui::render-line-string
+                  (list (ourro.tui:styled :code "$ make test")) 12)))
+           (is (search "48;2;25;15;11" rendered))
+           (is (= 12 (ourro.tui:display-width (strip-ansi rendered))))))
+    (ourro.tui:set-theme :light)))
+
 (test input-pane-shows-text
   (let ((input (make-instance 'ourro.tui:input-pane :text "hi there")))
     (let ((rendered (ourro.tui:render-component input 40)))

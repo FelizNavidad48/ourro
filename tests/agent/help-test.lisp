@@ -19,9 +19,20 @@
     (ourro.agent::cmd-help agent)
     (let ((text (help-transcript-text agent)))
       (is (search "/out" text))
+      (is (search "/theme" text))
       (is (search "ctrl-o" text))
       (is (search "cancels" text))
       (is (search "quits" text)))))
+
+(test theme-command-switches-and-validates
+  (let ((agent (help-agent)))
+    (unwind-protect
+         (progn
+           (ourro.agent::cmd-theme agent '("dark"))
+           (is (eq :dark (ourro.tui:current-theme)))
+           (ourro.agent::cmd-theme agent '("sepia"))
+           (is (search "unknown theme" (help-transcript-text agent))))
+      (ourro.tui:set-theme :light))))
 
 (test cold-boot-shows-primer
   (let ((agent (help-agent)))

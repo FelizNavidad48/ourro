@@ -1,29 +1,82 @@
 
 (in-package #:ourro.tui)
 
-(defparameter *styles*
-  '((:default   . "0")
-    (:header    . "1;38;5;45")
-    (:dim       . "2;37")
-    (:accent    . "1;38;5;51")
-    (:user      . "1;38;5;150")
-    (:assistant . "38;5;253")
-    (:tool      . "38;5;180")
-    (:success   . "1;38;5;42")
-    (:warning   . "1;38;5;214")
-    (:danger    . "1;38;5;203")
-    (:ticker    . "1;38;5;213")
-    (:status    . "38;5;110")
-    (:input     . "1;38;5;255")
-    (:think     . "3;38;5;103")
-    ;; Markdown rendering (M2-2).
-    (:code        . "38;5;108")
-    (:inline-code . "1;38;5;180")
-    (:bold        . "1;38;5;255"))
-  "Style keyword → SGR parameter string.")
+(defparameter *themes*
+  '((:light
+     (:default        . "38;2;25;15;11;48;2;251;244;230")
+     (:header         . "1;38;2;212;9;36;48;2;255;251;241")
+     (:dim            . "38;2;79;63;50;48;2;251;244;230")
+     (:accent         . "1;38;2;212;9;36;48;2;251;244;230")
+     (:user           . "1;38;2;212;9;36;48;2;251;244;230")
+     (:assistant      . "38;2;25;15;11;48;2;251;244;230")
+     (:tool           . "38;2;15;55;120;48;2;251;244;230")
+     (:success        . "1;38;2;0;105;17;48;2;251;244;230")
+     (:warning        . "1;38;2;166;78;0;48;2;251;244;230")
+     (:danger         . "1;38;2;201;0;0;48;2;251;244;230")
+     (:ticker         . "1;38;2;212;9;36;48;2;237;227;210")
+     (:status         . "38;2;79;63;50;48;2;237;227;210")
+     (:input          . "1;38;2;25;15;11;48;2;255;251;241")
+     (:think          . "3;38;2;132;108;90;48;2;251;244;230")
+     (:code           . "38;2;244;234;213;48;2;25;15;11")
+     (:code-dim       . "38;2;142;124;111;48;2;25;15;11")
+     (:lisp-code      . "38;2;25;15;11;48;2;255;251;241")
+     (:lisp-code-dim  . "38;2;132;108;90;48;2;255;251;241")
+     (:inline-code    . "38;2;15;55;120;48;2;239;231;217")
+     (:bold           . "1;38;2;25;15;11;48;2;251;244;230")
+     (:syntax-keyword . "38;2;212;9;36;48;2;255;251;241")
+     (:syntax-symbol  . "38;2;15;55;120;48;2;255;251;241")
+     (:syntax-string  . "38;2;0;105;17;48;2;255;251;241")
+     (:syntax-comment . "38;2;132;108;90;48;2;255;251;241")
+     (:syntax-paren   . "38;2;86;66;60;48;2;255;251;241"))
+    (:dark
+     (:default        . "38;2;244;234;213;48;2;18;10;8")
+     (:header         . "1;38;2;255;82;100;48;2;36;23;19")
+     (:dim            . "38;2;184;167;149;48;2;18;10;8")
+     (:accent         . "1;38;2;255;82;100;48;2;18;10;8")
+     (:user           . "1;38;2;249;145;0;48;2;18;10;8")
+     (:assistant      . "38;2;244;234;213;48;2;18;10;8")
+     (:tool           . "38;2;119;168;255;48;2;18;10;8")
+     (:success        . "1;38;2;103;200;120;48;2;18;10;8")
+     (:warning        . "1;38;2;249;145;0;48;2;18;10;8")
+     (:danger         . "1;38;2;255;85;85;48;2;18;10;8")
+     (:ticker         . "1;38;2;255;82;100;48;2;51;36;29")
+     (:status         . "38;2;184;167;149;48;2;51;36;29")
+     (:input          . "1;38;2;244;234;213;48;2;36;23;19")
+     (:think          . "3;38;2;169;148;134;48;2;18;10;8")
+     (:code           . "38;2;244;234;213;48;2;25;15;11")
+     (:code-dim       . "38;2;142;124;111;48;2;25;15;11")
+     (:lisp-code      . "38;2;244;234;213;48;2;36;23;19")
+     (:lisp-code-dim  . "38;2;169;148;134;48;2;36;23;19")
+     (:inline-code    . "38;2;119;168;255;48;2;44;31;25")
+     (:bold           . "1;38;2;255;251;241;48;2;18;10;8")
+     (:syntax-keyword . "38;2;255;82;100;48;2;25;15;11")
+     (:syntax-symbol  . "38;2;119;168;255;48;2;25;15;11")
+     (:syntax-string  . "38;2;103;200;120;48;2;25;15;11")
+     (:syntax-comment . "38;2;169;148;134;48;2;25;15;11")
+     (:syntax-paren   . "38;2;208;189;176;48;2;25;15;11")))
+  "Theme name → style keyword/truecolor SGR alist.")
+
+(defparameter *theme* :light)
+
+(defun theme-names () (mapcar #'car *themes*))
+
+(defun current-theme () *theme*)
+
+(defun set-theme (theme)
+  "Activate THEME and return its canonical keyword, or NIL when unknown."
+  (when (or (stringp theme) (symbolp theme) (characterp theme))
+    (let ((entry (find theme *themes* :key #'car
+                       :test (lambda (requested available)
+                               (string-equal (string requested)
+                                             (string available))))))
+      (when entry
+        (setf *theme* (car entry))))))
+
+(defun active-styles ()
+  (cdr (assoc *theme* *themes*)))
 
 (defun sgr (style)
-  (format nil "~C[~Am" #\Esc (or (cdr (assoc style *styles*)) "0")))
+  (format nil "~C[~Am" #\Esc (or (cdr (assoc style (active-styles))) "0")))
 
 (defun sgr-reset () (format nil "~C[0m" #\Esc))
 
@@ -117,11 +170,31 @@ WIDTH columns without splitting a wide character, and its actual column count
         (setf end (1+ i))))
     (values (subseq text 0 end) cols)))
 
-(defun render-span (span)
+(defun render-span (span &optional (base-style :default))
   "Render one (style . string) span with SGR wrapping."
   (if (consp span)
-      (format nil "~A~A~A" (sgr (car span)) (cdr span) (sgr-reset))
+      (format nil "~A~A~A" (sgr (car span)) (cdr span) (sgr base-style))
       (princ-to-string span)))
+
+(defparameter *code-row-styles* '(:code :code-dim))
+
+(defparameter *lisp-row-styles*
+  '(:lisp-code :lisp-code-dim :syntax-keyword :syntax-symbol :syntax-string
+    :syntax-comment :syntax-paren))
+
+(defun line-base-style (line)
+  "Code-fence rows keep their code surface across the full terminal width."
+  (let ((spans (if (listp line) line (list line))))
+    (cond
+      ((some (lambda (span)
+               (and (consp span) (member (car span) *lisp-row-styles*)))
+             spans)
+       :lisp-code)
+      ((some (lambda (span)
+               (and (consp span) (member (car span) *code-row-styles*)))
+             spans)
+       :code)
+      (t :default))))
 
 (defun line-plain-text (line)
   "The unstyled text of a line (list of spans/strings)."
@@ -132,30 +205,37 @@ WIDTH columns without splitting a wide character, and its actual column count
 (defun render-line-string (line width)
   "Render LINE (a list of spans) padded/truncated to WIDTH visible columns."
   (let* ((plain (line-plain-text line))
-         (visible (display-width plain)))
+         (visible (display-width plain))
+         (base-style (line-base-style line)))
     (cond
       ((> visible width)
        ;; Truncate: re-render spans up to WIDTH plain chars.
        (truncate-styled-line line width))
       (t
        (with-output-to-string (out)
+         (write-string (sgr base-style) out)
          (dolist (span (if (listp line) line (list line)))
-           (write-string (render-span span) out))
-         (loop repeat (- width visible) do (write-char #\Space out)))))))
+           (write-string (render-span span base-style) out))
+         (loop repeat (- width visible) do (write-char #\Space out))
+         (write-string (sgr-reset) out))))))
 
 (defun truncate-styled-line (line width)
   "Re-render LINE's spans up to WIDTH visible columns (M7-2), never splitting a
 wide character across the boundary."
-  (let ((remaining width))
+  (let ((remaining width)
+        (base-style (line-base-style line)))
     (with-output-to-string (out)
+      (write-string (sgr base-style) out)
       (dolist (span (if (listp line) line (list line)))
         (when (<= remaining 0) (return))
         (let* ((text (if (consp span) (cdr span) (princ-to-string span)))
                (style (and (consp span) (car span))))
           (multiple-value-bind (prefix cols) (take-columns text remaining)
-            (write-string (render-span (if style (styled style prefix) prefix))
+            (write-string (render-span (if style (styled style prefix) prefix)
+                                       base-style)
                           out)
-            (decf remaining cols)))))))
+            (decf remaining cols))))
+      (write-string (sgr-reset) out))))
 
 (defun render-lines (screen lines &key cursor-row cursor-column
                                        (cursor-visible nil))

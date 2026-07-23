@@ -30,6 +30,9 @@
            #:char-display-width
            #:take-columns
            #:styled
+           #:current-theme
+           #:set-theme
+           #:theme-names
            ;; components (render.lisp/components.lisp)
            #:paint-frame))
 

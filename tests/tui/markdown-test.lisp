@@ -29,10 +29,17 @@
   (let* ((text (format nil "before~%```lisp~%(defun very-long-line-that-exceeds (the width limit keeps going))~%```~%after"))
          (lines (ourro.tui:markdown-lines text 30))
          (styles (md-styles lines)))
-    (is (member :code styles))
-    (is (member :dim styles))            ; language tag on the opening fence
+    (is (member :syntax-symbol styles))
+    (is (member :lisp-code-dim styles))  ; language tag on the opening fence
     ;; Code is kept verbatim (truncated, never wrapped into separate words).
     (is (search "(defun very-long-line" (md-text lines)))))
+
+(test markdown-lisp-code-uses-syntax-palette
+  (let* ((text (format nil "```lisp~%(defun greet (:name name) \"hello\") ; note~%```"))
+         (styles (md-styles (ourro.tui:markdown-lines text 80))))
+    (dolist (style '(:syntax-paren :syntax-symbol :syntax-keyword
+                     :syntax-string :syntax-comment))
+      (is (member style styles)))))
 
 (test markdown-bold-and-inline-code
   (let* ((lines (ourro.tui:markdown-lines "use **pnpm** not `npm` here" 60))

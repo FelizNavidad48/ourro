@@ -145,6 +145,8 @@ handoff serialization can read it from a worker.")))
 
 (defun make-agent (&key provider (generation "gen-0001") supervisor
                         (mode :auto) visiting session-id)
+  (or (ourro.tui:set-theme (ourro.config:setting :theme :light))
+      (ourro.tui:set-theme :light))
   (let ((view (ourro.tui:make-view
                :repo (display-repo)
                :generation generation)))
@@ -1616,7 +1618,7 @@ dream window; :manual → never here (only /quit fires it)."
 
 (defparameter *slash-commands*
   '("help" "log" "evolutions" "out" "jobs" "genome" "tools" "freeze" "unfreeze"
-    "disarm" "arm" "keep" "revert" "travel" "onboard" "mouse" "quit")
+    "disarm" "arm" "keep" "revert" "travel" "onboard" "mouse" "theme" "quit")
   "Completion vocabulary for the input's ghost suggestions.")
 
 (defparameter *checkpoint-worthy-commands*
@@ -1661,6 +1663,7 @@ excluded, so /help, /log, /genome, /tools, /evolutions skip the disk write.")
       ((string= command "travel") (cmd-travel agent args))
       ((string= command "onboard") (cmd-onboard agent))
       ((string= command "mouse") (cmd-mouse agent))
+      ((string= command "theme") (cmd-theme agent args))
       ((member command '("quit" "exit" "q") :test #'string=)
        ;; A clean quit reaps background jobs (announced) — a deliberate exit,
        ;; unlike a generation restart, which leaves them running (M9-5).
@@ -1677,7 +1680,7 @@ excluded, so /help, /log, /genome, /tools, /evolutions skip the disk write.")
     (enqueue-ui agent '(:kind :dirty))))
 
 (defun cmd-help (agent)
-  (add-wrapped agent "commands: /log /evolutions /out [n] /genome /tools /freeze /unfreeze /disarm /arm /keep <gene> /revert /travel <gen> /onboard /mouse /quit"
+  (add-wrapped agent "commands: /log /evolutions /out [n] /genome /tools /freeze /unfreeze /disarm /arm /keep <gene> /revert /travel <gen> /onboard /mouse /theme <light|dark> /quit"
                :accent)
   (add-wrapped agent "two levers: /freeze stops new evolution · /disarm stops installed reflexes firing"
                :dim)
@@ -1698,6 +1701,33 @@ for wheel scrolling (shift-↑↓/pgup/pgdn always scroll either way)."
                      "mouse wheel scrolling ON — terminal text selection is captured while on; /mouse to turn off"
                      "mouse wheel scrolling OFF — select/copy text normally; scroll with shift-↑↓ or pgup/pgdn")
                  :accent)))
+
+(defun cmd-theme (agent args)
+  "Switch the live TUI palette. Set :THEME in config.sexp for the next boot."
+  (let ((requested (first args)))
+    (cond
+      ((null requested)
+       (add-wrapped agent
+                    (format nil "theme: ~A · usage: /theme light or /theme dark"
+                            (string-downcase
+                             (symbol-name (ourro.tui:current-theme))))
+                    :accent))
+      ((ourro.tui:set-theme requested)
+       ;; Theme changes alter every rendered escape sequence. Empty the diff
+       ;; cache so the next paint rewrites every row immediately.
+       (let ((screen (agent-screen agent)))
+         (when screen
+           (ourro.tui:screen-resize screen
+                                   (ourro.tui:screen-width screen)
+                                   (ourro.tui:screen-height screen))))
+       (add-wrapped agent
+                    (format nil "theme switched to ~A. Set :theme :~A in config.sexp to keep it after restart."
+                            (string-downcase requested)
+                            (string-downcase requested))
+                    :accent))
+      (t
+       (add-wrapped agent "unknown theme. usage: /theme light or /theme dark"
+                    :warning)))))
 
 (defun cmd-log (agent)
   (add-wrapped agent "recent events:" :accent)
