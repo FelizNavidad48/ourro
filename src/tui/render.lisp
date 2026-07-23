@@ -49,11 +49,11 @@
      (:lisp-code-dim  . "38;2;169;148;134;48;2;36;23;19")
      (:inline-code    . "38;2;119;168;255;48;2;44;31;25")
      (:bold           . "1;38;2;255;251;241;48;2;18;10;8")
-     (:syntax-keyword . "38;2;255;82;100;48;2;25;15;11")
-     (:syntax-symbol  . "38;2;119;168;255;48;2;25;15;11")
-     (:syntax-string  . "38;2;103;200;120;48;2;25;15;11")
-     (:syntax-comment . "38;2;169;148;134;48;2;25;15;11")
-     (:syntax-paren   . "38;2;208;189;176;48;2;25;15;11")))
+     (:syntax-keyword . "38;2;255;82;100;48;2;36;23;19")
+     (:syntax-symbol  . "38;2;119;168;255;48;2;36;23;19")
+     (:syntax-string  . "38;2;103;200;120;48;2;36;23;19")
+     (:syntax-comment . "38;2;169;148;134;48;2;36;23;19")
+     (:syntax-paren   . "38;2;208;189;176;48;2;36;23;19")))
   "Theme name → style keyword/truecolor SGR alist.")
 
 (defparameter *theme* :light)
@@ -173,7 +173,10 @@ WIDTH columns without splitting a wide character, and its actual column count
 (defun render-span (span &optional (base-style :default))
   "Render one (style . string) span with SGR wrapping."
   (if (consp span)
-      (format nil "~A~A~A" (sgr (car span)) (cdr span) (sgr base-style))
+      ;; Reset first so attributes such as bold/italic cannot leak from the
+      ;; span, then restore the row surface so code backgrounds remain solid.
+      (format nil "~A~A~A~A" (sgr (car span)) (cdr span)
+              (sgr-reset) (sgr base-style))
       (princ-to-string span)))
 
 (defparameter *code-row-styles* '(:code :code-dim))

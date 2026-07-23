@@ -44,6 +44,28 @@
          (is (null (ourro.tui:set-theme "sepia"))))
     (ourro.tui:set-theme :light)))
 
+(test span-restores-base-with-a-full-attribute-reset
+  (unwind-protect
+       (progn
+         (ourro.tui:set-theme :light)
+         (let ((rendered (ourro.tui::render-span
+                          (ourro.tui:styled :bold "bold") :default)))
+           (is (search (format nil "bold~A~A"
+                               (ourro.tui::sgr-reset)
+                               (ourro.tui::sgr :default))
+                       rendered))))
+    (ourro.tui:set-theme :light)))
+
+(test dark-lisp-tokens-share-the-row-background
+  (unwind-protect
+       (progn
+         (ourro.tui:set-theme :dark)
+         (dolist (style '(:lisp-code :lisp-code-dim :syntax-keyword
+                          :syntax-symbol :syntax-string :syntax-comment
+                          :syntax-paren))
+           (is (search "48;2;36;23;19" (ourro.tui::sgr style)))))
+    (ourro.tui:set-theme :light)))
+
 (test code-row-keeps-inverted-background-through-padding
   (unwind-protect
        (progn
