@@ -18,6 +18,28 @@
                   (dolist (span (first lines))
                     (write-string (cdr span) out)))))))
 
+(test chrome-right-segments-keep-the-bar-background
+  (let* ((view (ourro.tui:make-view :repo "demo" :generation "gen-0007"))
+         (header (first (ourro.tui:render-component
+                         (ourro.tui:view-header view) 80)))
+         (status (first (ourro.tui:render-component
+                         (ourro.tui:view-statusbar view) 80))))
+    (is (eq :header (caar (last header))))
+    (is (eq :status-accent (caar (last status))))
+    (dolist (theme '(:light :dark))
+      (unwind-protect
+           (progn
+             (ourro.tui:set-theme theme)
+             (is (search (if (eq theme :light)
+                             "48;2;255;251;241"
+                             "48;2;36;23;19")
+                         (ourro.tui::sgr (caar (last header)))))
+             (is (search (if (eq theme :light)
+                             "48;2;237;227;210"
+                             "48;2;51;36;29")
+                         (ourro.tui::sgr (caar (last status))))))
+        (ourro.tui:set-theme :dark)))))
+
 (test ticker-shows-when-set
   (let ((ticker (make-instance 'ourro.tui:ticker-pane)))
     (is (null (ourro.tui:render-component ticker 80)))
@@ -42,7 +64,7 @@
          (is (search "38;2;244;234;213"
                      (ourro.tui::sgr :default)))
          (is (null (ourro.tui:set-theme "sepia"))))
-    (ourro.tui:set-theme :light)))
+    (ourro.tui:set-theme :dark)))
 
 (test span-restores-base-with-a-full-attribute-reset
   (unwind-protect
@@ -54,7 +76,7 @@
                                (ourro.tui::sgr-reset)
                                (ourro.tui::sgr :default))
                        rendered))))
-    (ourro.tui:set-theme :light)))
+    (ourro.tui:set-theme :dark)))
 
 (test dark-lisp-tokens-share-the-row-background
   (unwind-protect
@@ -64,7 +86,7 @@
                           :syntax-symbol :syntax-string :syntax-comment
                           :syntax-paren))
            (is (search "48;2;36;23;19" (ourro.tui::sgr style)))))
-    (ourro.tui:set-theme :light)))
+    (ourro.tui:set-theme :dark)))
 
 (test code-row-keeps-inverted-background-through-padding
   (unwind-protect
@@ -75,7 +97,7 @@
                   (list (ourro.tui:styled :code "$ make test")) 12)))
            (is (search "48;2;25;15;11" rendered))
            (is (= 12 (ourro.tui:display-width (strip-ansi rendered))))))
-    (ourro.tui:set-theme :light)))
+    (ourro.tui:set-theme :dark)))
 
 (test input-pane-shows-text
   (let ((input (make-instance 'ourro.tui:input-pane :text "hi there")))

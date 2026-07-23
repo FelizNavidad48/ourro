@@ -32,7 +32,7 @@
            (is (eq :dark (ourro.tui:current-theme)))
            (ourro.agent::cmd-theme agent '("sepia"))
            (is (search "unknown theme" (help-transcript-text agent))))
-      (ourro.tui:set-theme :light))))
+      (ourro.tui:set-theme :dark))))
 
 (test cold-boot-shows-primer
   (let ((agent (help-agent)))

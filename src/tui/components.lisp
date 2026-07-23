@@ -466,7 +466,7 @@ caller then treats up/down as history navigation)."
                                      (unless (string= "" (statusbar-repo statusbar))
                                        (statusbar-repo statusbar)))
                             (- width 12)))
-                (styled :accent
+                (styled :header
                         (let ((pending (statusbar-pending statusbar)))
                           (fit-right
                            (format nil "~@[⚡~A ~]~A "
@@ -506,7 +506,7 @@ caller then treats up/down as history navigation)."
                     (subseq raw 0 (floor width 2))
                     raw)))
     (list (list (styled :status (fit base (max 0 (- width (length right)))))
-                (styled :accent right)))))
+                (styled :status-accent right)))))
 
 (defun ticker-action-label (action)
   "The display label of a ticker ACTION: a plain string is shown as-is; a
